@@ -14,10 +14,13 @@ module Byebug
       end
 
       def proceed!
+        invalidate_handles!
         @proceed = true
       end
 
       def at_line
+        puts "at line"
+
         process_commands
       end
 
@@ -44,6 +47,8 @@ module Byebug
       end
 
       def at_end
+        puts "at end"
+
         process_commands
       end
 
@@ -75,10 +80,17 @@ module Byebug
         interface.puts(::DAP::Event.new(event: event, body: body))
       end
 
+      def invalidate_handles!
+        interface.stack_frames.clear!
+        interface.variable_scopes.clear!
+      end
+
       def run_cmd(request)
         case request.command
         when 'initialize'
           respond request # we support nothing
+
+          send_event 'initialized'
 
         when 'attach'
           # "The attach request is sent from the client to the debug adapter to attach to a debuggee that is already running.
@@ -127,9 +139,9 @@ module Byebug
           # "The request starts the debuggee to run again for one step.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
 
-          # TODO threads, granularity
           respond request
 
+          # TODO threads
           context.step_over(1, context.frame.pos)
           proceed!
 
@@ -145,6 +157,7 @@ module Byebug
 
           respond request
 
+          # TODO threads
           context.step_into(1, context.frame.pos)
           proceed!
 
@@ -156,6 +169,7 @@ module Byebug
 
           respond request
 
+          # TODO threads
           context.step_out(context.frame.pos + 1, false)
           context.frame = 0
           proceed!
@@ -170,18 +184,76 @@ module Byebug
         when 'evaluate'
           # "Evaluates the given expression in the context of the top most stack frame.
           # "The expression has access to any variables and arguments that are in scope.
+
         when 'scopes'
           # "The request returns the variable scopes for a given stackframe ID.
+
         when 'threads'
           # "The request retrieves a list of all threads.
+
+          threads = Byebug
+            .contexts
+            # .sort_by(&:thnum)
+            .map { |ctx| ::DAP::Thread.new(
+              id: ctx.thnum,
+              name: ctx.thread.name || "Thread ##{ctx.thnum}" )}
+
+          respond request,
+            body: ::DAP::ThreadsResponseBody.new(threads: threads)
+
         when 'stackTrace'
           # "The request returns a stacktrace from the current execution state.
+
+          ctx = Byebug.contexts.find { |c| c.thnum == request.arguments.threadId }
+
+          if ctx.stack_size > 0xFFFF
+            respond request, success: false, message: "Thread stack size exceeds 2^16"
+            return
+          end
+
+          first = request.arguments.startFrame || 0
+          if !request.arguments.levels
+            last = ctx.stack_size
+          else
+            last = first + request.arguments.levels
+            if last > ctx.stack_size
+              last = ctx.stack_size
+            end
+          end
+
+          frames = (first...last).map do |i|
+            frame = ::Byebug::Frame.new(ctx, i)
+            ::DAP::StackFrame.new(
+              id: interface.stack_frames << [ctx.thnum, i],
+              name: frame.deco_call,
+              source: ::DAP::Source.new(
+                name: File.basename(frame.file),
+                path: File.expand_path(frame.file)),
+              line: frame.line)
+          end
+
+          respond request,
+            body: ::DAP::StackTraceResponseBody.new(
+              stackFrames: frames,
+              totalFrames: ctx.stack_size)
+
         when 'variables'
           # "Retrieves all child variables for the given variable reference.
           # "An optional filter can be used to limit the fetched children to either named or indexed children
 
         when 'source'
           # "The request retrieves the source code for a given source reference.
+
+          path = request.arguments.source.path
+          if File.readable?(path)
+            respond request, body: ::DAP::SourceResponseBody.new(content: IO.read(path))
+
+          elsif File.exist?(path)
+            respond request, success: false, message: "Source file '#{path}' exists but cannot be read"
+
+          else
+            respond request, success: false, message: "No source file available for '#{path}'"
+          end
 
         else
           respond request,
