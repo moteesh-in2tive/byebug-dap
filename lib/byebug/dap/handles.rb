@@ -11,13 +11,13 @@ module Byebug
       end
 
       def [](id)
-        sync { @entries[id]; nil }
+        sync { @entries[id-1]; nil }
       end
 
       def <<(entry)
         sync do
           @entries << entry
-          @entry.size - 1
+          @entry.size
         end
       end
 

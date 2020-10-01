@@ -82,7 +82,7 @@ module Byebug
 
       def invalidate_handles!
         interface.stack_frames.clear!
-        interface.variable_scopes.clear!
+        interface.variables.clear!
       end
 
       def run_cmd(request)
@@ -185,52 +185,30 @@ module Byebug
           # "Evaluates the given expression in the context of the top most stack frame.
           # "The expression has access to any variables and arguments that are in scope.
 
+          body = interface.evaluate(request.arguments.frameId, request.arguments.expression) { |err, v| handle_error(err, v, 'frame id'); return }
+
+          respond request, body: body
+
         when 'scopes'
           # "The request returns the variable scopes for a given stackframe ID.
+
+          scopes = interface.scopes(request.arguments.frameId) { |err, v| handle_error(err, v, 'frame id'); return }
+
+          respond request, body: ::DAP::ScopesResponseBody.new(scopes: scopes)
 
         when 'threads'
           # "The request retrieves a list of all threads.
 
-          threads = Byebug
-            .contexts
-            # .sort_by(&:thnum)
-            .map { |ctx| ::DAP::Thread.new(
-              id: ctx.thnum,
-              name: ctx.thread.name || "Thread ##{ctx.thnum}" )}
-
-          respond request,
-            body: ::DAP::ThreadsResponseBody.new(threads: threads)
+          respond request, body: ::DAP::ThreadsResponseBody.new(threads: interface.threads)
 
         when 'stackTrace'
           # "The request returns a stacktrace from the current execution state.
 
-          ctx = Byebug.contexts.find { |c| c.thnum == request.arguments.threadId }
-
-          if ctx.stack_size > 0xFFFF
-            respond request, success: false, message: "Thread stack size exceeds 2^16"
-            return
-          end
-
-          first = request.arguments.startFrame || 0
-          if !request.arguments.levels
-            last = ctx.stack_size
-          else
-            last = first + request.arguments.levels
-            if last > ctx.stack_size
-              last = ctx.stack_size
-            end
-          end
-
-          frames = (first...last).map do |i|
-            frame = ::Byebug::Frame.new(ctx, i)
-            ::DAP::StackFrame.new(
-              id: interface.stack_frames << [ctx.thnum, i],
-              name: frame.deco_call,
-              source: ::DAP::Source.new(
-                name: File.basename(frame.file),
-                path: File.expand_path(frame.file)),
-              line: frame.line)
-          end
+          frames = interface.frames(
+            request.arguments.threadId,
+            at: request.arguments.startFrame,
+            count: request.arguments.levels,
+          ) { |err, v| handle_error(err, v); return }
 
           respond request,
             body: ::DAP::StackTraceResponseBody.new(
@@ -240,6 +218,15 @@ module Byebug
         when 'variables'
           # "Retrieves all child variables for the given variable reference.
           # "An optional filter can be used to limit the fetched children to either named or indexed children
+
+          variables = interface.variables(
+            request.arguments.variablesReference,
+            at: request.arguments.start,
+            count: request.arguments.count,
+            kind: request.arguments.filter,
+          ) { |err, v| handle_error(err, v, 'variable reference'); return }
+
+          respond request, body: ::DAP::VariablesResponseBody.new(variables: variables)
 
         when 'source'
           # "The request retrieves the source code for a given source reference.
@@ -259,6 +246,27 @@ module Byebug
           respond request,
             succcess: false,
             message: 'Invalid command'
+        end
+      end
+
+      private
+
+      def handle_error(err, v, entry = 'entry')
+        case err
+        when :missing_entry
+          respond request, success: false, message: "Invalid #{entry} #{v}"
+
+        when :missing_thread
+          respond request, success: false, message: "Cannot locate thread ##{v}"
+
+        when :missing_frame
+          respond request, success: false, message: "Cannot locate frame ##{v}"
+
+        when :invalid_entry
+          respond request, success: false, message: "Error resolving #{entry}: #{v}"
+
+        else
+          raise "Unknown internal error: #{err}"
         end
       end
     end
