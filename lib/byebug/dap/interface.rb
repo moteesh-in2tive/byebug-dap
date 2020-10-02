@@ -15,18 +15,13 @@ module Byebug
         ::DAP::Encoding.decode(socket)
       end
 
-      def frame_ids
-        @frame_ids ||= Handles.new
-      end
-
-      def variable_refs
-        @variable_refs ||= Handles.new
+      def invalidate_handles!
+        frame_ids.clear!
+        variable_refs.clear!
       end
 
       def threads
-        Byebug
-          .contexts
-          # .sort_by(&:thnum)
+        Byebug.contexts
           .map { |ctx| ::DAP::Thread.new(
             id: ctx.thnum,
             name: ctx.thread.name || "Thread ##{ctx.thnum}" )}
@@ -83,12 +78,12 @@ module Byebug
 
         case kind
         when :arguments, :locals
-          kind, entry[0], ->(key) do
+          return kind, entry[0], ->(key) {
             values ||= frame.locals
             values[key]
-          end
+          }
         when :globals
-          kind, entry[0], ->(key) { frame._binding.eval(n.to_s) }
+          return kind, entry[0], ->(key) { frame._binding.eval(n.to_s) }
         else
           return yield(:invalid_entry, "Unknown variable scope #{kind}")
         end
@@ -176,6 +171,14 @@ module Byebug
       end
 
       private
+
+      def frame_ids
+        @frame_ids ||= Handles.new
+      end
+
+      def variable_refs
+        @variable_refs ||= Handles.new
+      end
 
       def frame_arg_names(frame)
         frame.args.filter { |a| a != [:rest] }.map { |kind, name| name }

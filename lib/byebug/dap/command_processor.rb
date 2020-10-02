@@ -14,40 +14,41 @@ module Byebug
       end
 
       def proceed!
-        invalidate_handles!
+        interface.invalidate_handles!
         @proceed = true
       end
 
-      def at_line
-        puts "at line"
+      def stopped
+        send_event 'stopped', reason: 'step', text: "Stopped at #{frame.file}:#{frame.line}"
 
         process_commands
       end
 
-      def at_tracing
-        interface.puts "Tracing: #{context.full_location}"
+      alias at_line stopped
+      alias at_end stopped
 
-        # run_auto_cmds(2)
+      def at_return(return_value)
+        stopped
       end
+
+      # def at_tracing
+      #   interface.puts "Tracing: #{context.full_location}"
+
+      #   # run_auto_cmds(2)
+      # end
+
+      # def at_catchpoint(exception)
+      #   interface.puts "Catchpoint at #{context.location}: `#{exception}'"
+      # end
 
       def at_breakpoint(brkpt)
         number = Byebug.breakpoints.index(brkpt) + 1
 
-        interface.puts "Stopped by breakpoint #{number} at #{frame.file}:#{frame.line}"
-      end
-
-      def at_catchpoint(exception)
-        interface.puts "Catchpoint at #{context.location}: `#{exception}'"
-      end
-
-      def at_return(return_value)
-        interface.puts "Return value is: #{safe_inspect(return_value)}"
-
-        process_commands
-      end
-
-      def at_end
-        puts "at end"
+        send_event 'stopped',
+          reason: 'breakpoint',
+          description: 'Hit breakpoint',
+          threadId: context.thnum,
+          text: "Stopped by breakpoint #{number} at #{frame.file}:#{frame.line}"
 
         process_commands
       end
@@ -66,6 +67,18 @@ module Byebug
         return
       end
 
+      # def safe_inspect(var)
+      #   var.inspect
+      # rescue StandardError
+      #   safe_to_s(var)
+      # end
+
+      # def safe_to_s(var)
+      #   var.to_s
+      # rescue StandardError
+      #   "*Error in evaluation*"
+      # end
+
       def respond(request, body = {}, success: true, **values)
         interface.puts(::DAP::Response.new(
           request_seq: request.seq,
@@ -78,11 +91,6 @@ module Byebug
       def send_event(event, **values)
         body = ::DAP.const_get("#{event[0].upcase}#{event[1..]}EventBody").new(values) unless values.empty?
         interface.puts(::DAP::Event.new(event: event, body: body))
-      end
-
-      def invalidate_handles!
-        interface.stack_frames.clear!
-        interface.variables.clear!
       end
 
       def run_cmd(request)
@@ -145,8 +153,6 @@ module Byebug
           context.step_over(1, context.frame.pos)
           proceed!
 
-          send_event 'stopped', reason: 'step'
-
         when 'stepIn'
           # "The request starts the debuggee to step into a function/method if possible.
           # "If it cannot step into a target, ‘stepIn’ behaves like ‘next’.
@@ -161,8 +167,6 @@ module Byebug
           context.step_into(1, context.frame.pos)
           proceed!
 
-          send_event 'stopped', reason: 'step'
-
         when 'stepOut'
           # "The request starts the debuggee to run again for one step.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
@@ -173,13 +177,6 @@ module Byebug
           context.step_out(context.frame.pos + 1, false)
           context.frame = 0
           proceed!
-
-          send_event 'stopped', reason: 'step'
-
-        when 'setBreakpoints'
-          # "Sets multiple breakpoints for a single source and clears all previous breakpoints in that source.
-          # "To clear all breakpoint for a source, specify an empty array.
-          # "When a breakpoint is hit, a ‘stopped’ event (with reason ‘breakpoint’) is generated.
 
         when 'evaluate'
           # "Evaluates the given expression in the context of the top most stack frame.
@@ -241,6 +238,28 @@ module Byebug
           else
             respond request, success: false, message: "No source file available for '#{path}'"
           end
+
+        when 'setBreakpoints'
+          # "Sets multiple breakpoints for a single source and clears all previous breakpoints in that source.
+          # "To clear all breakpoint for a source, specify an empty array.
+          # "When a breakpoint is hit, a ‘stopped’ event (with reason ‘breakpoint’) is generated.
+
+          path = File.realpath(request.arguments.source.path)
+          ::Byebug.breakpoints.each { |bp| ::Byebug::Breakpoint.remove(bp.id) if bp.source == path }
+
+          lines = ::Byebug::Breakpoint.potential_lines(path)
+          verified = []
+          request.arguments.breakpoints.each do |requested|
+            next unless lines.include? requested.line
+
+            bp = ::Byebug::Breakpoint.add(path, requested.line)
+            verified << ::DAP::Breakpoint.new(
+              id: bp.id,
+              verified: true,
+              line: requested.line)
+          end
+
+          respond request, body: ::DAP::SetBreakpointsResponseBody.new(breakpoints: verified)
 
         else
           respond request,

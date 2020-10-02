@@ -2,6 +2,7 @@ require 'dap'
 require 'byebug'
 require 'byebug/core'
 require 'byebug/remote'
+require_relative 'dap/handles'
 require_relative 'dap/command_processor'
 require_relative 'dap/interface'
 require_relative 'remote/server'
@@ -27,17 +28,10 @@ module Byebug
         Context.processor = Byebug::DAP::CommandProcessor
 
         Context.processor.new(Byebug.current_context, Context.interface).process_commands
-      rescue EOFError
+      rescue EOFError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
         puts "\nClient disconnected"
       rescue StandardError => e
-        s.write(::DAP::Encoding.encode(::DAP::Event.new(
-          event: 'exception',
-          body: {
-            class: e.class.name,
-            message: e.message,
-            backtrace: e.backtrace,
-          }
-        )))
+        puts "#{e.message} #{e.class}", *e.backtrace
       end
     end
   end
