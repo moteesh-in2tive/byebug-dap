@@ -19,15 +19,35 @@ module Byebug
       end
 
       def stopped
-        send_event 'stopped', reason: 'step', text: "Stopped at #{frame.file}:#{frame.line}"
+        reason, value = @stop_reason
+        case reason
+        when :breakpoint
+          number = Byebug.breakpoints.index(value) + 1
+
+          send_event 'stopped',
+            reason: 'breakpoint',
+            description: 'Hit breakpoint',
+            threadId: context.thnum,
+            text: "Stopped by breakpoint #{number} at #{frame.file}:#{frame.line}"
+
+        else
+          send_event 'stopped', reason: 'step', text: "Stopped at #{frame.file}:#{frame.line}"
+        end
+
+        @stop_reason = nil
 
         process_commands
       end
 
       alias at_line stopped
-      alias at_end stopped
+
+      def at_end
+        @stop_reason = [:ended]
+        stopped
+      end
 
       def at_return(return_value)
+        @stop_reason = [:returned, return_value]
         stopped
       end
 
@@ -42,22 +62,20 @@ module Byebug
       # end
 
       def at_breakpoint(brkpt)
-        number = Byebug.breakpoints.index(brkpt) + 1
-
-        send_event 'stopped',
-          reason: 'breakpoint',
-          description: 'Hit breakpoint',
-          threadId: context.thnum,
-          text: "Stopped by breakpoint #{number} at #{frame.file}:#{frame.line}"
-
-        process_commands
+        @stop_reason = [:breakpoint, brkpt]
       end
 
       def process_commands
         @proceed = false
 
         until @proceed
-          run_cmd interface.gets
+          begin
+            run_cmd interface.gets
+          rescue IOError, SystemCallError
+            raise
+          rescue StandardError => e
+            puts "\n! #{e.message} (#{e.class})", *e.backtrace
+          end
         end
 
       rescue EOFError
@@ -182,14 +200,14 @@ module Byebug
           # "Evaluates the given expression in the context of the top most stack frame.
           # "The expression has access to any variables and arguments that are in scope.
 
-          body = interface.evaluate(request.arguments.frameId, request.arguments.expression) { |err, v| handle_error(err, v, 'frame id'); return }
+          body = interface.evaluate(request.arguments.frameId, request.arguments.expression) { |err, v| handle_error(request, err, v, 'frame id'); return }
 
           respond request, body: body
 
         when 'scopes'
           # "The request returns the variable scopes for a given stackframe ID.
 
-          scopes = interface.scopes(request.arguments.frameId) { |err, v| handle_error(err, v, 'frame id'); return }
+          scopes = interface.scopes(request.arguments.frameId) { |err, v| handle_error(request, err, v, 'frame id'); return }
 
           respond request, body: ::DAP::ScopesResponseBody.new(scopes: scopes)
 
@@ -201,16 +219,16 @@ module Byebug
         when 'stackTrace'
           # "The request returns a stacktrace from the current execution state.
 
-          frames = interface.frames(
+          frames, stack_size = interface.frames(
             request.arguments.threadId,
             at: request.arguments.startFrame,
             count: request.arguments.levels,
-          ) { |err, v| handle_error(err, v); return }
+          ) { |err, v| handle_error(request, err, v); return }
 
           respond request,
             body: ::DAP::StackTraceResponseBody.new(
               stackFrames: frames,
-              totalFrames: ctx.stack_size)
+              totalFrames: stack_size)
 
         when 'variables'
           # "Retrieves all child variables for the given variable reference.
@@ -220,8 +238,8 @@ module Byebug
             request.arguments.variablesReference,
             at: request.arguments.start,
             count: request.arguments.count,
-            kind: request.arguments.filter,
-          ) { |err, v| handle_error(err, v, 'variable reference'); return }
+            filter: request.arguments.filter,
+          ) { |err, v| handle_error(request, err, v, 'variable reference'); return }
 
           respond request, body: ::DAP::VariablesResponseBody.new(variables: variables)
 
@@ -270,8 +288,11 @@ module Byebug
 
       private
 
-      def handle_error(err, v, entry = 'entry')
+      def handle_error(request, err, v, entry = 'entry')
         case err
+        when :missing_argument
+          respond request, success: false, message: "Missing #{v}"
+
         when :missing_entry
           respond request, success: false, message: "Invalid #{entry} #{v}"
 

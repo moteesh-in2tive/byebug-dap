@@ -36,10 +36,12 @@ module Byebug
         return yield(:missing_thread, thnum) unless ctx
         return yield(:missing_frame, frnum) unless frnum < ctx.stack_size
 
-        ::Byebug::Frame.new(ctx, frnum)
+        return ::Byebug::Frame.new(ctx, frnum), thnum, frnum
       end
 
       def frames(thnum, at:, count:)
+        return yield(:missing_argument, 'thread ID') unless thnum
+
         ctx = Byebug.contexts.find { |c| c.thnum == thnum }
         return yield(:missing_thread, thnum) unless ctx
 
@@ -53,16 +55,18 @@ module Byebug
           end
         end
 
-        (first...last).map do |i|
+        frames = (first...last).map do |i|
           frame = ::Byebug::Frame.new(ctx, i)
           ::DAP::StackFrame.new(
-            id: interface.stack_frames << [ctx.thnum, i],
+            id: frame_ids << [ctx.thnum, i],
             name: frame.deco_call,
             source: ::DAP::Source.new(
               name: File.basename(frame.file),
               path: File.expand_path(frame.file)),
             line: frame.line)
         end
+
+        return frames, ctx.stack_size
       end
 
       def resolve_variable_ref(ref)
@@ -83,14 +87,16 @@ module Byebug
             values[key]
           }
         when :globals
-          return kind, entry[0], ->(key) { frame._binding.eval(n.to_s) }
+          return kind, entry[0], ->(key) { frame._binding.eval(key.to_s) }
         else
           return yield(:invalid_entry, "Unknown variable scope #{kind}")
         end
       end
 
       def scopes(frameId, &block)
-        frame = resolve_frame_id(frameId, &block)
+        return yield(:missing_argument, 'frame ID') unless frameId
+
+        frame, thnum, frnum = resolve_frame_id(frameId, &block)
         return unless frame
 
         scopes = []
@@ -100,7 +106,7 @@ module Byebug
           scopes << ::DAP::Scope.new(
             name: 'Arguments',
             presentationHint: 'arguments',
-            variablesReference: interface.variables << [thnum, frnum, :arguments, args],
+            variablesReference: variable_refs << [thnum, frnum, :arguments, args],
             namedVariables: args.size,
             indexedVariables: 0,
             expensive: false)
@@ -111,7 +117,7 @@ module Byebug
           scopes << ::DAP::Scope.new(
             name: 'Locals',
             presentationHint: 'locals',
-            variablesReference: interface.variables << [thnum, frnum, :locals, locals],
+            variablesReference: variable_refs << [thnum, frnum, :locals, locals],
             namedVariables: locals.size,
             indexedVariables: 0,
             expensive: false)
@@ -122,7 +128,7 @@ module Byebug
           scopes << ::DAP::Scope.new(
             name: 'Globals',
             presentationHint: 'globals',
-            variablesReference: interface.variables << [thnum, frnum, :globals, globals],
+            variablesReference: variable_refs << [thnum, frnum, :globals, globals],
             namedVariables: globals.size,
             indexedVariables: 0,
             expensive: true)
@@ -131,12 +137,14 @@ module Byebug
         scopes
       end
 
-      def variables(varRef, at:, count:, kind: nil, &block)
+      def variables(varRef, at:, count:, filter: nil, &block)
+        return yield(:missing_argument, 'variables reference') unless varRef
+
         kind, scope, get = resolve_variable_ref(varRef, &block)
         return unless kind
 
         # TODO support structured variables
-        unless kind.nil? || kind == 'named'
+        unless filter.nil? || filter == 'named'
           return []
         end
 
@@ -160,7 +168,7 @@ module Byebug
       end
 
       def evaluate(frameId, expression, &block)
-        frame = resolve_frame_id(frameId, &block)
+        frame, thnum, frnum = resolve_frame_id(frameId, &block)
         return unless frame
 
         # TODO support structured values
