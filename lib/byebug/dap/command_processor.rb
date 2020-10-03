@@ -118,19 +118,13 @@ module Byebug
 
           send_event 'initialized'
 
-        when 'attach'
+        when 'attach', 'launch'
           # "The attach request is sent from the client to the debug adapter to attach to a debuggee that is already running.
 
-          # TODO what do we attach?
-          respond request
-
-        when 'launch'
           # "This launch request is sent from the client to the debug adapter to start the debuggee with or without debugging (if ‘noDebug’ is true).
 
-          # TODO how do we launch?
-          respond request,
-            success: false,
-            message: 'Launching not supported'
+          # TODO what do we attach? how do we launch?
+          respond request
 
         when 'configurationDone'
           respond request

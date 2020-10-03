@@ -31,6 +31,8 @@ class Byebug::Remote::Server
     def initialize
       @in = STDIN
       @out = STDOUT
+      STDIN.sync = true
+      STDOUT.sync = true
     end
 
     def close; @in.close; @out.close; end
