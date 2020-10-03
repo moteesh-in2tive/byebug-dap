@@ -18,9 +18,15 @@ module Byebug
         @proceed = true
       end
 
-      def stopped
+      def stopped!
         reason, value = @stop_reason
         case reason
+        when :pause
+          send_event 'stopped',
+            threadId: context.thnum,
+            reason: 'pause',
+            text: "Paused at #{frame.file}:#{frame.line}"
+
         when :breakpoint
           number = Byebug.breakpoints.index(value) + 1
 
@@ -31,7 +37,10 @@ module Byebug
             text: "Stopped by breakpoint #{number} at #{frame.file}:#{frame.line}"
 
         else
-          send_event 'stopped', reason: 'step', text: "Stopped at #{frame.file}:#{frame.line}"
+          send_event 'stopped',
+            reason: 'step',
+            threadId: context.thnum,
+            text: "Stepped at #{frame.file}:#{frame.line}"
         end
 
         @stop_reason = nil
@@ -39,16 +48,16 @@ module Byebug
         process_commands
       end
 
-      alias at_line stopped
+      alias at_line stopped!
 
       def at_end
-        @stop_reason = [:ended]
-        stopped
+        @stop_reason = [:ended] unless @stop_reason
+        stopped!
       end
 
       def at_return(return_value)
-        @stop_reason = [:returned, return_value]
-        stopped
+        @stop_reason = [:returned, return_value] unless @stop_reason
+        stopped!
       end
 
       # def at_tracing
@@ -74,7 +83,7 @@ module Byebug
           rescue IOError, SystemCallError
             raise
           rescue StandardError => e
-            puts "\n! #{e.message} (#{e.class})", *e.backtrace
+            STDERR.puts "\n! #{e.message} (#{e.class})", *e.backtrace
           end
         end
 
@@ -136,13 +145,10 @@ module Byebug
           # "The request suspends the debuggee.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘pause’) after the thread has been paused successfully.
 
-          # TODO threads
-          respond request
+          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
 
-          Byebug.start
-          Byebug.thread_context(Thread.main).interrupt
-
-          send_event 'stopped', reason: 'pause'
+          Byebug.start unless Byebug.started?
+          ctx.interrupt
 
         when 'continue', 'disconnect'
           # Disconnect
@@ -165,10 +171,10 @@ module Byebug
           # "The request starts the debuggee to run again for one step.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
 
+          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           respond request
 
-          # TODO threads
-          context.step_over(1, context.frame.pos)
+          ctx.step_over(1, ctx.frame.pos)
           proceed!
 
         when 'stepIn'
@@ -179,21 +185,21 @@ module Byebug
           # "the optional argument ‘targetId’ can be used to control into which target the ‘stepIn’ should occur.
           # "The list of possible targets for a given source line can be retrieved via the ‘stepInTargets’ request.
 
+          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           respond request
 
-          # TODO threads
-          context.step_into(1, context.frame.pos)
+          ctx.step_into(1, ctx.frame.pos)
           proceed!
 
         when 'stepOut'
           # "The request starts the debuggee to run again for one step.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
 
+          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           respond request
 
-          # TODO threads
-          context.step_out(context.frame.pos + 1, false)
-          context.frame = 0
+          ctx.step_out(ctx.frame.pos + 1, false)
+          ctx.frame = 0
           proceed!
 
         when 'evaluate'

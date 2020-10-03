@@ -1,6 +1,12 @@
 module Byebug
   module DAP
     class Interface
+      @@debug = false
+
+      def self.enable_debug
+        @@debug = true
+      end
+
       attr_reader :socket
 
       def initialize(socket)
@@ -8,11 +14,14 @@ module Byebug
       end
 
       def puts(message)
+        STDERR.puts "> #{message.to_wire}" if @@debug
         socket.write ::DAP::Encoding.encode(message)
       end
 
       def gets
-        ::DAP::Encoding.decode(socket)
+        m = ::DAP::Encoding.decode(socket)
+        STDERR.puts "< #{m.to_wire}" if @@debug
+        m
       end
 
       def invalidate_handles!
@@ -25,6 +34,15 @@ module Byebug
           .map { |ctx| ::DAP::Thread.new(
             id: ctx.thnum,
             name: ctx.thread.name || "Thread ##{ctx.thnum}" )}
+      end
+
+      def find_thread(id)
+        return yield(:missing_argument, 'thread ID') unless thnum
+
+        ctx = Byebug.contexts.find { |c| c.thnum == id }
+        return yield(:missing_thread, id) unless ctx
+
+        ctx
       end
 
       def resolve_frame_id(id)
@@ -40,10 +58,7 @@ module Byebug
       end
 
       def frames(thnum, at:, count:)
-        return yield(:missing_argument, 'thread ID') unless thnum
-
-        ctx = Byebug.contexts.find { |c| c.thnum == thnum }
-        return yield(:missing_thread, thnum) unless ctx
+        ctx = find_thread(thnum) { |err, v| return yield(err, v) }
 
         first = at || 0
         if !count
@@ -74,8 +89,7 @@ module Byebug
         return yield(:missing_entry, ref) unless entry
 
         thnum, frnum, kind, *entry = entry
-        ctx = Byebug.contexts.find { |c| c.thnum == thnum }
-        return yield(:missing_thread, thnum) unless ctx
+        ctx = find_thread(thnum) { |err, v| return yield(err, v) }
         return yield(:missing_frame, frnum) unless frnum < ctx.stack_size
 
         frame = ::Byebug::Frame.new(ctx, frnum)

@@ -9,8 +9,10 @@ require_relative 'remote/server'
 
 module Byebug
   class << self
-    def start_dap(unix:)
-      dap.start_unix(unix)
+    def start_dap(host, port = 0)
+      return dap.start_stdio if host == :stdio
+      return dap.start_unix(port) if host == :unix
+      return dap.start(host, port)
     end
 
     def run_dap(*args, **kwargs)
@@ -29,9 +31,9 @@ module Byebug
 
         Context.processor.new(Byebug.current_context, Context.interface).process_commands
       rescue EOFError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
-        puts "\nClient disconnected"
+        STDERR.puts "\nClient disconnected"
       rescue StandardError => e
-        puts "#{e.message} #{e.class}", *e.backtrace
+        STDERR.puts "#{e.message} #{e.class}", *e.backtrace
       end
     end
   end

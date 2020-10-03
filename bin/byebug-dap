@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'byebug/dap'
+
+USAGE = <<-EOS
+Usage: byebug-dap [options] <--stdio|--unix dap.socket|--listen 12345> <program>
+EOS
+
+def next_arg
+  arg = ARGV.pop
+  return arg if arg
+
+  STDERR.puts USAGE
+  exit!
+end
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = USAGE
+
+  opts.on("--stdio", "Listen on STDIN and STDOUT") { |v| options[:stdio] = v }
+  opts.on("--listen PORT", "Listen on a TCP port") { |v| options[:listen] = v }
+  opts.on("--unix SOCKET", "Listen on a unix socket") { |v| options[:unix] = v }
+  opts.on("-f", "--[no-]force", "When listening on a unix socket, delete the socket if it exists") { |v| options[:force] = v }
+  opts.on("--debug", "Debug DAP") { |v| Byebug::DAP::Interface.enable_debug if v }
+end.parse!
+
+program = next_arg
+
+if program == '-'
+  program = next_arg
+  options[:stdio] = true
+end
+
+if options[:stdio]
+  Byebug.run_dap(:stdio) { require File.realpath(program) }
+  exit
+end
+
+if options[:listen]
+  host, port = listen.split(':')
+  Byebug.run_dap(host, port || 0) { require File.realpath(program) }
+  exit
+end
+
+if options[:unix]
+  if File.exist?(options[:unix])
+    if options[:force]
+      File.delete(options[:unix])
+    else
+      puts "#{options[:unix]} already exists"
+      exit!
+    end
+  end
+
+  begin
+    Byebug.run_dap(:unix, options[:unix]) { require File.realpath(program) }
+  ensure
+    File.delete(options[:unix]) if File.exist?(options[:unix])
+  end
+
+  exit
+end
+
+STDERR.puts USAGE, "One of -, --listen, or --unix is required"
+exit!
