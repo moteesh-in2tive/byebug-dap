@@ -94,23 +94,13 @@ module Byebug
         return
       end
 
-      # def safe_inspect(var)
-      #   var.inspect
-      # rescue StandardError
-      #   safe_to_s(var)
-      # end
-
-      # def safe_to_s(var)
-      #   var.to_s
-      # rescue StandardError
-      #   "*Error in evaluation*"
-      # end
-
-      def respond(request, body = {}, success: true, **values)
+      def respond(request, body = {}, success: true, message: 'Success', **values)
+        # TODO make body default to nil?
         interface.puts(::DAP::Response.new(
           request_seq: request.seq,
           command: request.command,
           success: success,
+          message: message,
           body: body,
           **values))
       end
@@ -123,7 +113,8 @@ module Byebug
       def run_cmd(request)
         case request.command
         when 'initialize'
-          respond request # we support nothing
+          respond request, body: ::DAP::Capabilities.new(
+            supportsConfigurationDoneRequest: true)
 
           send_event 'initialized'
 
@@ -138,16 +129,18 @@ module Byebug
 
           # TODO how do we launch?
           respond request,
-            succcess: false,
+            success: false,
             message: 'Launching not supported'
+
+        when 'configurationDone'
+          respond request
 
         when 'pause'
           # "The request suspends the debuggee.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘pause’) after the thread has been paused successfully.
 
-          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
-
           Byebug.start unless Byebug.started?
+          ctx = interface.find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           ctx.interrupt
 
         when 'continue', 'disconnect'
@@ -171,7 +164,7 @@ module Byebug
           # "The request starts the debuggee to run again for one step.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
 
-          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
+          ctx = interface.find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           respond request
 
           ctx.step_over(1, ctx.frame.pos)
@@ -185,7 +178,7 @@ module Byebug
           # "the optional argument ‘targetId’ can be used to control into which target the ‘stepIn’ should occur.
           # "The list of possible targets for a given source line can be retrieved via the ‘stepInTargets’ request.
 
-          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
+          ctx = interface.find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           respond request
 
           ctx.step_into(1, ctx.frame.pos)
@@ -195,7 +188,7 @@ module Byebug
           # "The request starts the debuggee to run again for one step.
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
 
-          ctx = find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
+          ctx = interface.find_thread(request.arguments.threadId) { |err, v| handle_error(request, err, v, 'thread id'); return }
           respond request
 
           ctx.step_out(ctx.frame.pos + 1, false)
@@ -287,7 +280,7 @@ module Byebug
 
         else
           respond request,
-            succcess: false,
+            success: false,
             message: 'Invalid command'
         end
       end

@@ -14,6 +14,7 @@ class Byebug::Remote::Server
     yield if block_given?
 
     @thread = ::Byebug::DebugThread.new do
+      STDERR.puts "Listening on Unix socket '#{path}'"
       while (session = server.accept)
         @main_loop.call(session)
 

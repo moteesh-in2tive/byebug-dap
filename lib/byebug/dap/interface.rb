@@ -15,6 +15,7 @@ module Byebug
 
       def puts(message)
         STDERR.puts "> #{message.to_wire}" if @@debug
+        message.validate!
         socket.write ::DAP::Encoding.encode(message)
       end
 
@@ -33,11 +34,12 @@ module Byebug
         Byebug.contexts
           .map { |ctx| ::DAP::Thread.new(
             id: ctx.thnum,
-            name: ctx.thread.name || "Thread ##{ctx.thnum}" )}
+            name: ctx.thread.name || "Thread ##{ctx.thnum}" )
+            .validate!}
       end
 
       def find_thread(id)
-        return yield(:missing_argument, 'thread ID') unless thnum
+        return yield(:missing_argument, 'thread ID') unless id
 
         ctx = Byebug.contexts.find { |c| c.thnum == id }
         return yield(:missing_thread, id) unless ctx
@@ -78,7 +80,9 @@ module Byebug
             source: ::DAP::Source.new(
               name: File.basename(frame.file),
               path: File.expand_path(frame.file)),
-            line: frame.line)
+            line: frame.line,
+            column: 0) # TODO real column
+            .validate!
         end
 
         return frames, ctx.stack_size
@@ -124,6 +128,7 @@ module Byebug
             namedVariables: args.size,
             indexedVariables: 0,
             expensive: false)
+            .validate!
         end
 
         locals = frame_local_names(frame, args: args).sort
@@ -135,6 +140,7 @@ module Byebug
             namedVariables: locals.size,
             indexedVariables: 0,
             expensive: false)
+            .validate!
         end
 
         globals = global_names.sort
@@ -146,6 +152,7 @@ module Byebug
             namedVariables: globals.size,
             indexedVariables: 0,
             expensive: true)
+            .validate!
         end
 
         scopes
@@ -173,11 +180,9 @@ module Byebug
         end
 
         scope[first...last].map do |var|
-          value = get.call(var)
-          ::DAP::Variable.new(
-            name: var,
-            value: value,
-            type: value.class.name)
+          value, type = prepare_value_from(get, :call, var) { ["*Error in evaluation*", nil] }
+
+          ::DAP::Variable.new(name: var, value: value, type: type, variablesReference: 0).validate!
         end
       end
 
@@ -186,13 +191,31 @@ module Byebug
         return unless frame
 
         # TODO support structured values
-        value = frame._binding.eval(expression)
-        ::DAP::EvaluateResponseBody.new(
-          result: value,
-          type: value.class.name)
+        value, type = prepare_value_from(frame._binding, :eval, expression) { ["*Error in evaluation*", nil] }
+
+        ::DAP::EvaluateResponseBody.new(result: value, type: type).validate!
       end
 
       private
+
+      def safe(target, method, *args)
+        target.__send__(method, *args)
+      rescue StandardError
+        yield
+      end
+
+      def prepare_value(val)
+        str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
+        cls = safe(val, :class) { nil }
+        typ = safe(cls, :name) { safe(cls, :to_s) { nil } }
+
+        return str, typ
+      end
+
+      def prepare_value_from(target, method, *args, &block)
+        val = safe(target, method, *args) { return yield }
+        prepare_value(val, &block)
+      end
 
       def frame_ids
         @frame_ids ||= Handles.new
@@ -207,8 +230,11 @@ module Byebug
       end
 
       def frame_local_names(frame, args: nil)
-        args ||= frame_arg_names(frame)
-        frame.locals.keys - args + (frame._self.to_s == 'main' ? [] : [:self])
+        locals = frame.locals
+        locals = locals.keys unless locals == [] # BUG in Byebug?
+        locals -= args || frame_arg_names(frame)
+        locals << :self if frame._self.to_s != 'main'
+        locals
       end
 
       def global_names
