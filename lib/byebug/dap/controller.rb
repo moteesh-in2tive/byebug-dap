@@ -28,8 +28,8 @@ module Byebug
         @interface.socket.close
       end
 
-      def find_processor(threadId, &block)
-        ctx = @interface.find_thread(threadId, &block)
+      def find_processor(threadId)
+        ctx = @interface.find_thread(threadId)
         ctx.__send__(:processor)
       end
 
@@ -83,10 +83,16 @@ module Byebug
 
           respond!
 
-        when 'pause', 'next', 'stepIn', 'stepOut', 'continue'
+        when 'pause'
           running!
 
-          Byebug.start unless Byebug.started?
+          ctx = @interface.find_thread(request.arguments.threadId)
+          ctx.interrupt
+          ctx.__send__(:processor) << request
+
+        when 'next', 'stepIn', 'stepOut', 'continue'
+          running!
+
           find_processor(request.arguments.threadId) << request
           respond!
 

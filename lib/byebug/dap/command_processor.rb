@@ -117,7 +117,6 @@ module Byebug
           # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘pause’) after the thread has been paused successfully.
 
           @pause_requested = true
-          context.interrupt
 
         when 'next'
           # "The request starts the debuggee to run again for one step.
