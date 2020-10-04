@@ -11,14 +11,11 @@ module Byebug
         @context = context
         @interface = interface
         @proceed = false
-        @messages = Concurrent::Channel.new
+        @messages = MessageChannel.new
       end
 
       def <<(message)
-        Concurrent::Channel.select do |s|
-          s.put(@messages, message) { true }
-          s.after(1) { false }
-        end
+        @messages.push(message, 1)
       end
 
       def proceed!
@@ -96,7 +93,7 @@ module Byebug
 
       def process_commands
         loop do
-          m = @messages.receive
+          m = @messages.pop
           break unless m
           execute_command m
 
