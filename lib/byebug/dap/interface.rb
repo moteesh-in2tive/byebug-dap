@@ -100,19 +100,24 @@ module Byebug
         raise InvalidRequestArgumentError.new(:missing_entry, value: ref, scope: 'variables reference') unless entry
 
         thnum, frnum, kind, *entry = entry
-        ctx = find_thread(thnum)
-        raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
-
-        frame = ::Byebug::Frame.new(ctx, frnum)
 
         case kind
-        when :arguments, :locals
+        when :locals
+          ctx = find_thread(thnum)
+          raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
+
+          frame = ::Byebug::Frame.new(ctx, frnum)
+
           return kind, entry[0], ->(key) {
+            return frame._self if key == :self
             values ||= frame.locals
             values[key]
           }
         when :globals
           return kind, entry[0], ->(key) { frame._binding.eval(key.to_s) }
+        when :variable, :evalate
+          value, named, indexed = entry
+          return kind, named, ->(key) { value.instance_eval { binding }.eval(key.to_s) }
         else
           raise InvalidRequestArgumentError.new(:invalid_entry, value: kind, scope: 'variable scope')
         end
@@ -126,19 +131,7 @@ module Byebug
 
         scopes = []
 
-        args = frame_arg_names(frame).sort
-        unless args.empty?
-          scopes << ::DAP::Scope.new(
-            name: 'Arguments',
-            presentationHint: 'arguments',
-            variablesReference: variable_refs << [thnum, frnum, :arguments, args],
-            namedVariables: args.size,
-            indexedVariables: 0,
-            expensive: false)
-            .validate!
-        end
-
-        locals = frame_local_names(frame, args: args).sort
+        locals = frame_local_names(frame).sort
         unless locals.empty?
           scopes << ::DAP::Scope.new(
             name: 'Locals',
@@ -155,7 +148,7 @@ module Byebug
           scopes << ::DAP::Scope.new(
             name: 'Globals',
             presentationHint: 'globals',
-            variablesReference: variable_refs << [thnum, frnum, :globals, globals],
+            variablesReference: variable_refs << [0, 0, :globals, globals],
             namedVariables: globals.size,
             indexedVariables: 0,
             expensive: true)
@@ -187,9 +180,18 @@ module Byebug
         end
 
         scope[first...last].map do |var|
-          value, type = prepare_value_from(get, :call, var) { ["*Error in evaluation*", nil] }
+          raw, value, type, named, indexed = prepare_value_from(get, :call, var) { ["*Error in evaluation*", nil] }
 
-          ::DAP::Variable.new(name: var, value: value, type: type, variablesReference: 0).validate!
+          args = {name: var, value: value, type: type}
+          if named.empty? && indexed.empty?
+            args[:variablesReference] = 0
+          else
+            args[:variablesReference] = variable_refs << [0, 0, :variable, raw, named, indexed]
+            args[:namedVariables] = named.size
+            args[:indexedVariables] = indexed.size
+          end
+
+          ::DAP::Variable.new(args).validate!
         end
       end
 
@@ -198,9 +200,18 @@ module Byebug
         return unless frame
 
         # TODO support structured values
-        value, type = prepare_value_from(frame._binding, :eval, expression) { ["*Error in evaluation*", nil] }
+        raw, value, type, named, indexed = prepare_value_from(frame._binding, :eval, expression) { ["*Error in evaluation*", nil] }
 
-        ::DAP::EvaluateResponseBody.new(result: value, type: type).validate!
+        args = {result: value, type: type}
+        if named.empty? && indexed.empty?
+          args[:variablesReference] = 0
+        else
+          args[:variablesReference] = variable_refs << [0, 0, :evaluate, raw, named, indexed]
+          args[:namedVariables] = named.size
+          args[:indexedVariables] = indexed.size
+        end
+
+        ::DAP::EvaluateResponseBody.new(args).validate!
       end
 
       private
@@ -213,14 +224,9 @@ module Byebug
         @variable_refs ||= Handles.new
       end
 
-      def frame_arg_names(frame)
-        frame.args.filter { |a| a != [:rest] }.map { |kind, name| name }
-      end
-
-      def frame_local_names(frame, args: nil)
+      def frame_local_names(frame)
         locals = frame.locals
         locals = locals.keys unless locals == [] # BUG in Byebug?
-        locals -= args || frame_arg_names(frame)
         locals << :self if frame._self.to_s != 'main'
         locals
       end
