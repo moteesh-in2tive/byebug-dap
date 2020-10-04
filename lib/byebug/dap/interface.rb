@@ -193,7 +193,7 @@ module Byebug
         case kind
         when :variable
           klazz = ::DAP::Variable
-          args = { name: safe_inspect(name) { '???' }, value: value, type: type }
+          args = { name: safe(name, :to_s) { safe(name, :inspect) { '???' } }, value: value, type: type }
         when :evaluate
           klazz = ::DAP::EvaluateResponseBody
           args = { result: value, type: type }

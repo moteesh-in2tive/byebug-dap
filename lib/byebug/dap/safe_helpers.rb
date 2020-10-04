@@ -30,12 +30,8 @@ module Byebug
         yield
       end
 
-      def safe_inspect(val, &block)
-        safe(val, :inspect) { safe(val, :to_s, &block) }
-      end
-
       def prepare_value(val)
-        str = safe_inspect(val) { return yield }
+        str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
         cls = safe(val, :class) { nil }
         typ = safe(cls, :name) { safe(cls, :to_s) { nil } }
 
