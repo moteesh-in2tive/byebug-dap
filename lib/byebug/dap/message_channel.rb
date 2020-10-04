@@ -1,10 +1,6 @@
 module Byebug
   module DAP
     class MessageChannel
-      class TimeoutError; end
-
-      extend Forwardable
-
       def initialize
         @mu = Mutex.new
         @cond = ConditionVariable.new
