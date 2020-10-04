@@ -15,7 +15,10 @@ module Byebug
       end
 
       def <<(message)
-        @messages << message
+        Concurrent::Channel.select do |s|
+          s.put(@messages, message) { true }
+          s.after(1) { false }
+        end
       end
 
       def proceed!

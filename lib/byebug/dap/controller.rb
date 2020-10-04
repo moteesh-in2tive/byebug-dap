@@ -28,11 +28,6 @@ module Byebug
         @interface.socket.close
       end
 
-      def find_processor(threadId)
-        ctx = @interface.find_thread(threadId)
-        ctx.__send__(:processor)
-      end
-
       def running!
         raise InvalidRequestArgumentError.new(:not_running, nil) unless Byebug.started?
       end
@@ -50,6 +45,7 @@ module Byebug
             supportsConfigurationDoneRequest: true)
 
           @interface.event! 'initialized'
+          return
 
         when 'disconnect'
           # "The ‘disconnect’ request is sent from the client to the debug adapter in order to stop debugging.
@@ -67,6 +63,7 @@ module Byebug
           Byebug.mode = :attached
           Byebug.start
           respond!
+          return
 
         when 'launch'
           # "This launch request is sent from the client to the debug adapter to start the debuggee with or without debugging (if ‘noDebug’ is true).
@@ -77,49 +74,48 @@ module Byebug
           end
 
           respond!
+          return
 
         when 'configurationDone'
           # "This optional request indicates that the client has finished initialization of the debug adapter.
 
           respond!
+          return
+        end
 
-        when 'pause'
-          running!
+        running!
 
+        case request.command
+        when 'pause', 'next', 'stepIn', 'stepOut', 'continue'
           ctx = @interface.find_thread(request.arguments.threadId)
-          ctx.interrupt
-          ctx.__send__(:processor) << request
+          ctx.interrupt if request.command == 'pause'
 
-        when 'next', 'stepIn', 'stepOut', 'continue'
-          running!
-
-          find_processor(request.arguments.threadId) << request
-          respond!
+          sent = ctx.__send__(:processor) << request
+          if sent
+            respond!
+          else
+            respond! success: false, message: "Debugger on thread ##{ctx.thnum} is not responding"
+          end
 
         when 'evaluate'
           # "Evaluates the given expression in the context of the top most stack frame.
           # "The expression has access to any variables and arguments that are in scope.
 
-          running!
           respond! body: @interface.evaluate(request.arguments.frameId, request.arguments.expression)
 
         when 'scopes'
           # "The request returns the variable scopes for a given stackframe ID.
 
-          running!
           respond! body: ::DAP::ScopesResponseBody.new(
             scopes: @interface.scopes(request.arguments.frameId))
 
         when 'threads'
           # "The request retrieves a list of all threads.
 
-          running!
           respond! body: ::DAP::ThreadsResponseBody.new(threads: @interface.threads)
 
         when 'stackTrace'
           # "The request returns a stacktrace from the current execution state.
-
-          running!
 
           frames, stack_size = @interface.frames(
             request.arguments.threadId,
@@ -134,8 +130,6 @@ module Byebug
           # "Retrieves all child variables for the given variable reference.
           # "An optional filter can be used to limit the fetched children to either named or indexed children
 
-          running!
-
           variables = @interface.variables(
             request.arguments.variablesReference,
             at: request.arguments.start,
@@ -146,8 +140,6 @@ module Byebug
 
         when 'source'
           # "The request retrieves the source code for a given source reference.
-
-          running!
 
           path = request.arguments.source.path
           if File.readable?(path)
@@ -164,8 +156,6 @@ module Byebug
           # "Sets multiple breakpoints for a single source and clears all previous breakpoints in that source.
           # "To clear all breakpoint for a source, specify an empty array.
           # "When a breakpoint is hit, a ‘stopped’ event (with reason ‘breakpoint’) is generated.
-
-          running!
 
           path = File.realpath(request.arguments.source.path)
           ::Byebug.breakpoints.each { |bp| ::Byebug::Breakpoint.remove(bp.id) if bp.source == path }
