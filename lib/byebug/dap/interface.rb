@@ -1,6 +1,8 @@
 module Byebug
   module DAP
     class Interface
+      include SafeHelpers
+
       @@debug = false
 
       def self.enable_debug
@@ -13,13 +15,18 @@ module Byebug
         @socket = socket
       end
 
-      def puts(message)
+      def <<(message)
         STDERR.puts "> #{message.to_wire}" if @@debug
         message.validate!
         socket.write ::DAP::Encoding.encode(message)
       end
 
-      def gets
+      def event!(event, **values)
+        body = ::DAP.const_get("#{event[0].upcase}#{event[1..]}EventBody").new(values) unless values.empty?
+        self << ::DAP::Event.new(event: event, body: body)
+      end
+
+      def receive
         m = ::DAP::Encoding.decode(socket)
         STDERR.puts "< #{m.to_wire}" if @@debug
         m
@@ -39,28 +46,28 @@ module Byebug
       end
 
       def find_thread(id)
-        return yield(:missing_argument, 'thread ID') unless id
+        raise InvalidRequestArgumentError.new(:missing_argument, scope: 'thread ID') unless id
 
         ctx = Byebug.contexts.find { |c| c.thnum == id }
-        return yield(:missing_thread, id) unless ctx
+        raise InvalidRequestArgumentError.new(:missing_thread, value: id) unless ctx
 
         ctx
       end
 
       def resolve_frame_id(id)
         entry = frame_ids[id]
-        return yield(:missing_entry, id) unless entry
+        raise InvalidRequestArgumentError.new(:missing_entry, value: id, scope: 'frame ID') unless entry
 
         thnum, frnum = entry
         ctx = Byebug.contexts.find { |c| c.thnum == thnum }
-        return yield(:missing_thread, thnum) unless ctx
-        return yield(:missing_frame, frnum) unless frnum < ctx.stack_size
+        raise InvalidRequestArgumentError.new(:missing_thread, value: thnum) unless ctx
+        raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
 
         return ::Byebug::Frame.new(ctx, frnum), thnum, frnum
       end
 
       def frames(thnum, at:, count:)
-        ctx = find_thread(thnum) { |err, v| return yield(err, v) }
+        ctx = find_thread(thnum)
 
         first = at || 0
         if !count
@@ -90,11 +97,11 @@ module Byebug
 
       def resolve_variable_ref(ref)
         entry = variable_refs[ref]
-        return yield(:missing_entry, ref) unless entry
+        raise InvalidRequestArgumentError.new(:missing_entry, value: ref, scope: 'variables reference') unless entry
 
         thnum, frnum, kind, *entry = entry
-        ctx = find_thread(thnum) { |err, v| return yield(err, v) }
-        return yield(:missing_frame, frnum) unless frnum < ctx.stack_size
+        ctx = find_thread(thnum)
+        raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
 
         frame = ::Byebug::Frame.new(ctx, frnum)
 
@@ -107,14 +114,14 @@ module Byebug
         when :globals
           return kind, entry[0], ->(key) { frame._binding.eval(key.to_s) }
         else
-          return yield(:invalid_entry, "Unknown variable scope #{kind}")
+          raise InvalidRequestArgumentError.new(:invalid_entry, value: kind, scope: 'variable scope')
         end
       end
 
-      def scopes(frameId, &block)
-        return yield(:missing_argument, 'frame ID') unless frameId
+      def scopes(frameId)
+        raise InvalidRequestArgumentError.new(:missing_argument, scope: 'frame ID') unless frameId
 
-        frame, thnum, frnum = resolve_frame_id(frameId, &block)
+        frame, thnum, frnum = resolve_frame_id(frameId)
         return unless frame
 
         scopes = []
@@ -158,10 +165,10 @@ module Byebug
         scopes
       end
 
-      def variables(varRef, at:, count:, filter: nil, &block)
-        return yield(:missing_argument, 'variables reference') unless varRef
+      def variables(varRef, at:, count:, filter: nil)
+        raise InvalidRequestArgumentError.new(:missing_argument, scope: 'variables reference') unless varRef
 
-        kind, scope, get = resolve_variable_ref(varRef, &block)
+        kind, scope, get = resolve_variable_ref(varRef)
         return unless kind
 
         # TODO support structured variables
@@ -186,8 +193,8 @@ module Byebug
         end
       end
 
-      def evaluate(frameId, expression, &block)
-        frame, thnum, frnum = resolve_frame_id(frameId, &block)
+      def evaluate(frameId, expression)
+        frame, thnum, frnum = resolve_frame_id(frameId)
         return unless frame
 
         # TODO support structured values
@@ -197,25 +204,6 @@ module Byebug
       end
 
       private
-
-      def safe(target, method, *args)
-        target.__send__(method, *args)
-      rescue StandardError
-        yield
-      end
-
-      def prepare_value(val)
-        str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
-        cls = safe(val, :class) { nil }
-        typ = safe(cls, :name) { safe(cls, :to_s) { nil } }
-
-        return str, typ
-      end
-
-      def prepare_value_from(target, method, *args, &block)
-        val = safe(target, method, *args) { return yield }
-        prepare_value(val, &block)
-      end
 
       def frame_ids
         @frame_ids ||= Handles.new

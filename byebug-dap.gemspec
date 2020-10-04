@@ -13,4 +13,5 @@ Gem::Specification.new do |s|
 
     s.add_runtime_dependency 'byebug'
     s.add_runtime_dependency 'ruby-dap'
+    s.add_runtime_dependency 'concurrent-ruby-edge'
   end

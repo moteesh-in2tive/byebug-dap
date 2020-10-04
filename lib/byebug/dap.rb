@@ -2,8 +2,12 @@ require 'dap'
 require 'byebug'
 require 'byebug/core'
 require 'byebug/remote'
+require 'concurrent-edge'
 require_relative 'dap/handles'
+require_relative 'dap/safe_helpers'
+require_relative 'dap/invalid_request_argument_error'
 require_relative 'dap/command_processor'
+require_relative 'dap/controller'
 require_relative 'dap/interface'
 require_relative 'remote/server'
 
@@ -16,9 +20,7 @@ module Byebug
     end
 
     def run_dap(*args, **kwargs)
-      Byebug.mode = :attached
       Byebug.start_dap(*args, **kwargs)
-      Byebug.start
       yield
     end
 
@@ -29,11 +31,7 @@ module Byebug
         Context.interface = Byebug::DAP::Interface.new(s)
         Context.processor = Byebug::DAP::CommandProcessor
 
-        Context.processor.new(Byebug.current_context, Context.interface).process_commands
-      rescue EOFError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
-        STDERR.puts "\nClient disconnected"
-      rescue StandardError => e
-        STDERR.puts "#{e.message} #{e.class}", *e.backtrace
+        Byebug::DAP::Controller.new(Context.interface).process_commands
       end
     end
   end
