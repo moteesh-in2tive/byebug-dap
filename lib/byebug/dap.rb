@@ -12,6 +12,17 @@ require_relative 'dap/interface'
 require_relative 'remote/server'
 
 module Byebug
+  module DAP
+    module Debug
+      class << self
+        @protocol = false
+        @evaluate = false
+
+        attr_accessor :protocol, :evaluate
+      end
+    end
+  end
+
   class << self
     def start_dap(host, port = 0)
       return dap.start_stdio if host == :stdio

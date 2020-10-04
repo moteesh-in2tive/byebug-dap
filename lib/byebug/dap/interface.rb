@@ -3,12 +3,6 @@ module Byebug
     class Interface
       include SafeHelpers
 
-      @@debug = false
-
-      def self.enable_debug
-        @@debug = true
-      end
-
       attr_reader :socket
 
       def initialize(socket)
@@ -16,7 +10,7 @@ module Byebug
       end
 
       def <<(message)
-        STDERR.puts "> #{message.to_wire}" if @@debug
+        STDERR.puts "> #{message.to_wire}" if Debug.protocol
         message.validate!
         socket.write ::DAP::Encoding.encode(message)
       end
@@ -28,7 +22,7 @@ module Byebug
 
       def receive
         m = ::DAP::Encoding.decode(socket)
-        STDERR.puts "< #{m.to_wire}" if @@debug
+        STDERR.puts "< #{m.to_wire}" if Debug.protocol
         m
       end
 
@@ -95,34 +89,6 @@ module Byebug
         return frames, ctx.stack_size
       end
 
-      def resolve_variable_ref(ref)
-        entry = variable_refs[ref]
-        raise InvalidRequestArgumentError.new(:missing_entry, value: ref, scope: 'variables reference') unless entry
-
-        thnum, frnum, kind, *entry = entry
-
-        case kind
-        when :locals
-          ctx = find_thread(thnum)
-          raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
-
-          frame = ::Byebug::Frame.new(ctx, frnum)
-
-          return kind, entry[0], ->(key) {
-            return frame._self if key == :self
-            values ||= frame.locals
-            values[key]
-          }
-        when :globals
-          return kind, entry[0], ->(key) { frame._binding.eval(key.to_s) }
-        when :variable, :evalate
-          value, named, indexed = entry
-          return kind, named, ->(key) { value.instance_eval { binding }.eval(key.to_s) }
-        else
-          raise InvalidRequestArgumentError.new(:invalid_entry, value: kind, scope: 'variable scope')
-        end
-      end
-
       def scopes(frameId)
         raise InvalidRequestArgumentError.new(:missing_argument, scope: 'frame ID') unless frameId
 
@@ -148,7 +114,7 @@ module Byebug
           scopes << ::DAP::Scope.new(
             name: 'Globals',
             presentationHint: 'globals',
-            variablesReference: variable_refs << [0, 0, :globals, globals],
+            variablesReference: variable_refs << [thnum, frnum, :globals, globals],
             namedVariables: globals.size,
             indexedVariables: 0,
             expensive: true)
@@ -161,60 +127,88 @@ module Byebug
       def variables(varRef, at:, count:, filter: nil)
         raise InvalidRequestArgumentError.new(:missing_argument, scope: 'variables reference') unless varRef
 
-        kind, scope, get = resolve_variable_ref(varRef)
-        return unless kind
+        entry = variable_refs[varRef]
+        raise InvalidRequestArgumentError.new(:missing_entry, value: ref, scope: 'variables reference') unless entry
 
-        # TODO support structured variables
-        unless filter.nil? || filter == 'named'
-          return []
+        thnum, frnum, kind, *entry = entry
+
+        case kind
+        when :locals, :globals
+          ctx = find_thread(thnum)
+          raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
+
+          frame = ::Byebug::Frame.new(ctx, frnum)
         end
+
+        case kind
+        when :locals
+          named, indexed = entry[0], []
+          get = ->(key) {
+            return frame._self if key == :self
+            values ||= frame.locals
+            values[key]
+          }
+
+        when :globals
+          named, indexed = entry[0], []
+          get = ->(key) { frame._binding.eval(key.to_s) }
+
+        when :variable, :evalate
+          value, named, indexed = entry
+          get = ->(key) { value.instance_eval { binding }.eval(key.to_s) }
+          index = ->(key) { value[key] }
+
+        else
+          raise InvalidRequestArgumentError.new(:invalid_entry, value: kind, scope: 'variable scope')
+        end
+
+        case filter
+        when 'named'
+          indexed = []
+        when 'indexed'
+          named = []
+        end
+
+        vars = named.map { |k| [k, get] } + indexed.map { |k| [k, index] }
 
         first = at || 0
-        if !count
-          last = scope.size
-        else
-          last = first + count
-          if last > scope.size
-            last = scope.size
-          end
-        end
+        last = count ? first + count : vars.size
+        last = vars.size unless last < vars.size
 
-        scope[first...last].map do |var|
-          raw, value, type, named, indexed = prepare_value_from(get, :call, var) { ["*Error in evaluation*", nil] }
-
-          args = {name: var, value: value, type: type}
-          if named.empty? && indexed.empty?
-            args[:variablesReference] = 0
-          else
-            args[:variablesReference] = variable_refs << [0, 0, :variable, raw, named, indexed]
-            args[:namedVariables] = named.size
-            args[:indexedVariables] = indexed.size
-          end
-
-          ::DAP::Variable.new(args).validate!
-        end
+        vars[first...last].map { |var, get| prepare_value_response(:variable, get, :call, var, name: var) }
       end
 
       def evaluate(frameId, expression)
         frame, thnum, frnum = resolve_frame_id(frameId)
         return unless frame
 
-        # TODO support structured values
-        raw, value, type, named, indexed = prepare_value_from(frame._binding, :eval, expression) { ["*Error in evaluation*", nil] }
+        prepare_value_response(frame._binding, :eval, expression)
+      end
 
-        args = {result: value, type: type}
+      private
+
+      def prepare_value_response(kind, target, method, *args, name: nil)
+        raw, value, type, named, indexed = prepare_value_from(target, method, *args) { [nil, "*Error in evaluation*", nil, [], []] }
+
+        case kind
+        when :variable
+          klazz = ::DAP::Variable
+          args = { name: safe_inspect(name) { '???' }, value: value, type: type }
+        when :evaluate
+          klazz = ::DAP::EvaluateResponseBody
+          args = { result: value, type: type }
+        end
+
         if named.empty? && indexed.empty?
           args[:variablesReference] = 0
         else
-          args[:variablesReference] = variable_refs << [0, 0, :evaluate, raw, named, indexed]
+          args[:variablesReference] = variable_refs << [0, 0, kind, raw, named, indexed]
           args[:namedVariables] = named.size
           args[:indexedVariables] = indexed.size
         end
 
-        ::DAP::EvaluateResponseBody.new(args).validate!
+        klazz.new(args).validate!
       end
-
-      private
 
       def frame_ids
         @frame_ids ||= Handles.new

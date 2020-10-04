@@ -20,13 +20,22 @@ module Byebug
       end
 
       def safe(target, method, *args)
-        target.__send__(method, *args)
-      rescue StandardError
+        if target.respond_to?(method)
+          target.__send__(method, *args)
+        else
+          yield
+        end
+      rescue StandardError => e
+        STDERR.puts "\n! #{e.message} (#{e.class})", *e.backtrace if Debug.evaluate
         yield
       end
 
+      def safe_inspect(val, &block)
+        safe(val, :inspect) { safe(val, :to_s, &block) }
+      end
+
       def prepare_value(val)
-        str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
+        str = safe_inspect(val) { return yield }
         cls = safe(val, :class) { nil }
         typ = safe(cls, :name) { safe(cls, :to_s) { nil } }
 
@@ -36,7 +45,13 @@ module Byebug
         named = safe(val, :instance_variables) { [] }
         named += safe(val, :class_variables) { [] }
         # named += safe(val, :constants) { [] }
-        indexed = [] # TODO indexed items
+
+        indexed = safe(-> {
+          return (0...val.size).to_a if val.is_a?(Array)
+          return val.keys if val.respond_to?(:keys) && val.respond_to?(:[])
+          []
+        }, :call) { [] }
+
         return str, typ, named, indexed
       end
 

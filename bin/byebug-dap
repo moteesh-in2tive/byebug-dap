@@ -23,7 +23,8 @@ OptionParser.new do |opts|
   opts.on("--listen PORT", "Listen on a TCP port") { |v| options[:listen] = v }
   opts.on("--unix SOCKET", "Listen on a unix socket") { |v| options[:unix] = v }
   opts.on("-f", "--[no-]force", "When listening on a unix socket, delete the socket if it exists") { |v| options[:force] = v }
-  opts.on("--debug", "Debug DAP") { |v| Byebug::DAP::Interface.enable_debug if v }
+  opts.on("--debug-protocol", "Debug DAP") { |v| Byebug::DAP::Debug.protocol = true if v }
+  opts.on("--debug-evaluate", "Debug variable evaluation") { |v| Byebug::DAP::Debug.evaluate = true if v }
 end.parse!
 
 program = next_arg
@@ -63,5 +64,5 @@ if options[:unix]
   exit
 end
 
-STDERR.puts USAGE, "One of -, --listen, or --unix is required"
+STDERR.puts USAGE, "One of --stdio, --listen, or --unix is required"
 exit!
