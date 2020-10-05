@@ -33,10 +33,11 @@ module Byebug
 
       def threads
         Byebug.contexts
+          .filter { |ctx| !ctx.thread.is_a?(DebugThread) }
           .map { |ctx| ::DAP::Thread.new(
             id: ctx.thnum,
-            name: ctx.thread.name || "Thread ##{ctx.thnum}" )
-            .validate!}
+            name: ctx.thread.name || "Thread ##{ctx.thnum}")
+            .validate! }
       end
 
       def find_thread(id)
@@ -89,6 +90,15 @@ module Byebug
         return frames, ctx.stack_size
       end
 
+      def resolve_variable_reference(varRef)
+        raise InvalidRequestArgumentError.new(:missing_argument, scope: 'variables reference') unless varRef
+
+        entry = variable_refs[varRef]
+        raise InvalidRequestArgumentError.new(:missing_entry, value: ref, scope: 'variables reference') unless entry
+
+        entry
+      end
+
       def scopes(frameId)
         raise InvalidRequestArgumentError.new(:missing_argument, scope: 'frame ID') unless frameId
 
@@ -125,12 +135,7 @@ module Byebug
       end
 
       def variables(varRef, at:, count:, filter: nil)
-        raise InvalidRequestArgumentError.new(:missing_argument, scope: 'variables reference') unless varRef
-
-        entry = variable_refs[varRef]
-        raise InvalidRequestArgumentError.new(:missing_entry, value: ref, scope: 'variables reference') unless entry
-
-        thnum, frnum, kind, *entry = entry
+        thnum, frnum, kind, *entry = resolve_variable_reference(varRef)
 
         case kind
         when :locals, :globals
@@ -175,20 +180,20 @@ module Byebug
         last = count ? first + count : vars.size
         last = vars.size unless last < vars.size
 
-        vars[first...last].map { |var, get| prepare_value_response(:variable, get, :call, var, name: var) }
+        vars[first...last].map { |var, get| prepare_value_response(thnum, frnum, :variable, get, :call, var, name: var) }
       end
 
       def evaluate(frameId, expression)
         frame, thnum, frnum = resolve_frame_id(frameId)
         return unless frame
 
-        prepare_value_response(frame._binding, :eval, expression)
+        prepare_value_response(thnum, frnum, :evaluate, frame._binding, :eval, expression)
       end
 
       private
 
-      def prepare_value_response(kind, target, method, *args, name: nil)
-        raw, value, type, named, indexed = prepare_value_from(target, method, *args) { [nil, "*Error in evaluation*", nil, [], []] }
+      def prepare_value_response(thnum, frnum, kind, target, method, *margs, name: nil)
+        raw, value, type, named, indexed = prepare_value_from(target, method, *margs) { [nil, "*Error in evaluation*", nil, [], []] }
 
         case kind
         when :variable
@@ -202,7 +207,7 @@ module Byebug
         if named.empty? && indexed.empty?
           args[:variablesReference] = 0
         else
-          args[:variablesReference] = variable_refs << [0, 0, kind, raw, named, indexed]
+          args[:variablesReference] = variable_refs << [thnum, frnum, kind, raw, named, indexed]
           args[:namedVariables] = named.size
           args[:indexedVariables] = indexed.size
         end

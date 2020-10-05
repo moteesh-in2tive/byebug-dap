@@ -3,17 +3,25 @@ module Byebug
     class Controller
       class DisconnectError < StandardError; end
 
-      def initialize(interface)
+      def initialize(interface, signal_start = nil)
         @interface = interface
+        @signal_start = signal_start
+
+        @trace = TracePoint.new(:thread_begin, :thread_end) { |t| process_trace t }
       end
 
-      def process_commands
+      def run
+        @trace.enable
+
         loop do
           @request = @interface.receive
-          execute_command @request
+          process_command @request
 
         rescue InvalidRequestArgumentError => e
           handle_error e
+
+        rescue CommandProcessor::TimeoutError => e
+          respond! success: false, message: "Debugger on thread ##{e.context.thnum} is not responding"
         end
 
       rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, DisconnectError
@@ -28,11 +36,24 @@ module Byebug
         @interface.socket.close
       end
 
+      private
+
+      def process_trace(trace)
+        ctx = Byebug.contexts.find { |c| c.thread == Thread.current }
+
+        case trace.event
+        when :thread_begin
+          @interface.event! 'thread', reason: 'started', threadId: ctx.thnum
+        when :thread_end
+          @interface.event! 'thread', reason: 'exited', threadId: ctx.thnum
+        end
+      end
+
       def running!
         raise InvalidRequestArgumentError.new(:not_running, nil) unless Byebug.started?
       end
 
-      def execute_command(request)
+      def process_command(request)
         case request.command
         when 'initialize'
           # "The ‘initialize’ request is sent as the first request from the client to the debug adapter
@@ -62,6 +83,9 @@ module Byebug
 
           Byebug.mode = :attached
           Byebug.start
+
+          @signal_start.call(:attach) if @signal_start
+
           respond!
           return
 
@@ -72,6 +96,8 @@ module Byebug
             Byebug.mode = :launched
             Byebug.start
           end
+
+          @signal_start.call(:launch) if @signal_start
 
           respond!
           return
@@ -90,18 +116,26 @@ module Byebug
           ctx = @interface.find_thread(request.arguments.threadId)
           ctx.interrupt if request.command == 'pause'
 
-          sent = ctx.__send__(:processor) << request
-          if sent
-            respond!
-          else
-            respond! success: false, message: "Debugger on thread ##{ctx.thnum} is not responding"
-          end
+          ctx.__send__(:processor) << request
+          respond!
 
         when 'evaluate'
           # "Evaluates the given expression in the context of the top most stack frame.
           # "The expression has access to any variables and arguments that are in scope.
 
           respond! body: @interface.evaluate(request.arguments.frameId, request.arguments.expression)
+
+        when 'variables'
+          # "Retrieves all child variables for the given variable reference.
+          # "An optional filter can be used to limit the fetched children to either named or indexed children
+
+          variables = @interface.variables(
+            request.arguments.variablesReference,
+            at: request.arguments.start,
+            count: request.arguments.count,
+            filter: request.arguments.filter)
+
+          respond! body: ::DAP::VariablesResponseBody.new(variables: variables)
 
         when 'scopes'
           # "The request returns the variable scopes for a given stackframe ID.
@@ -125,18 +159,6 @@ module Byebug
           respond! body: ::DAP::StackTraceResponseBody.new(
             stackFrames: frames,
             totalFrames: stack_size)
-
-        when 'variables'
-          # "Retrieves all child variables for the given variable reference.
-          # "An optional filter can be used to limit the fetched children to either named or indexed children
-
-          variables = @interface.variables(
-            request.arguments.variablesReference,
-            at: request.arguments.start,
-            count: request.arguments.count,
-            filter: request.arguments.filter)
-
-          respond! body: ::DAP::VariablesResponseBody.new(variables: variables)
 
         when 'source'
           # "The request retrieves the source code for a given source reference.
@@ -193,22 +215,22 @@ module Byebug
       def handle_error(ex)
         case ex.error
         when :not_running
-          respond! @request, success: false, message: "Debugger is not running"
+          respond! success: false, message: "Debugger is not running"
 
         when :missing_argument
-          respond! @request, success: false, message: "Missing #{ex.scope}"
+          respond! success: false, message: "Missing #{ex.scope}"
 
         when :missing_entry
-          respond! @request, success: false, message: "Invalid #{ex.scope} #{ex.value}"
+          respond! success: false, message: "Invalid #{ex.scope} #{ex.value}"
 
         when :missing_thread
-          respond! @request, success: false, message: "Cannot locate thread ##{ex.value}"
+          respond! success: false, message: "Cannot locate thread ##{ex.value}"
 
         when :missing_frame
-          respond! @request, success: false, message: "Cannot locate frame ##{ex.value}"
+          respond! success: false, message: "Cannot locate frame ##{ex.value}"
 
         when :invalid_entry
-          respond! @request, success: false, message: "Error resolving #{ex.scope}: #{ex.value}"
+          respond! success: false, message: "Error resolving #{ex.scope}: #{ex.value}"
 
         else
           raise "Unknown internal error: #{err}"

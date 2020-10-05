@@ -1,6 +1,6 @@
 module Byebug
   module DAP
-    class InvalidRequestArgumentError
+    class InvalidRequestArgumentError < StandardError
       attr_accessor :error, :value, :scope
 
       def initialize(error, value: nil, scope: nil)

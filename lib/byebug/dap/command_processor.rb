@@ -5,6 +5,14 @@ module Byebug
 
       class ProceedError < StandardError; end
 
+      class TimeoutError < StandardError
+        attr_reader :context
+
+        def initialize(context)
+          @context = context
+        end
+      end
+
       attr_reader :context, :interface
 
       def initialize(context, interface)
@@ -15,7 +23,7 @@ module Byebug
       end
 
       def <<(message)
-        @messages.push(message, 1)
+        @messages.push(message, 1) { raise TimeoutError.new(context) }
       end
 
       def proceed!

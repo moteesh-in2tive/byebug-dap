@@ -22,47 +22,50 @@ OptionParser.new do |opts|
   opts.on("--stdio", "Listen on STDIN and STDOUT") { |v| options[:stdio] = v }
   opts.on("--listen PORT", "Listen on a TCP port") { |v| options[:listen] = v }
   opts.on("--unix SOCKET", "Listen on a unix socket") { |v| options[:unix] = v }
+  opts.on("-w", "--[no-]wait", "Wait for attach or launch command before running program") { |v| options[:wait] = v }
   opts.on("-f", "--[no-]force", "When listening on a unix socket, delete the socket if it exists") { |v| options[:force] = v }
   opts.on("--debug-protocol", "Debug DAP") { |v| Byebug::DAP::Debug.protocol = true if v }
   opts.on("--debug-evaluate", "Debug variable evaluation") { |v| Byebug::DAP::Debug.evaluate = true if v }
 end.parse!
 
 program = next_arg
-
 if program == '-'
   program = next_arg
   options[:stdio] = true
 end
 
 if options[:stdio]
-  Byebug.run_dap(:stdio) { require File.realpath(program) }
-  exit
-end
+  host, port = :stdio, nil
 
-if options[:listen]
-  host, port = listen.split(':')
-  Byebug.run_dap(host, port || 0) { require File.realpath(program) }
-  exit
-end
+elsif options[:listen]
+  host, port = options[:listen].split(':')
+  host, port = 'localhost', host unless port
 
-if options[:unix]
-  if File.exist?(options[:unix])
+elsif options[:unix]
+  host, port = :unix, options[:unix]
+
+  if File.exist?(port)
     if options[:force]
-      File.delete(options[:unix])
+      File.delete(port)
     else
-      puts "#{options[:unix]} already exists"
+      puts "#{port} already exists"
       exit!
     end
   end
 
-  begin
-    Byebug.run_dap(:unix, options[:unix]) { require File.realpath(program) }
-  ensure
-    File.delete(options[:unix]) if File.exist?(options[:unix])
-  end
-
-  exit
+else
+  STDERR.puts USAGE, "One of --stdio, --listen, or --unix is required"
+  exit!
 end
 
-STDERR.puts USAGE, "One of --stdio, --listen, or --unix is required"
-exit!
+begin
+  if options[:wait]
+    Byebug.start_dap(host, port) { require File.realpath(program) }
+  else
+    Byebug.start_dap(host, port)
+    require File.realpath(program)
+  end
+
+ensure
+  File.delete(port) if File.exist?(port) if host == :unix
+end

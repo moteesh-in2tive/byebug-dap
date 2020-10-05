@@ -20,7 +20,7 @@ module Byebug
           return if @closed
 
           if @have
-            @cond.broadcast
+            @cond.signal
             @have = false
             return @value
           end
@@ -36,14 +36,14 @@ module Byebug
           raise RuntimeError, "Send on closed channel" if @closed
 
           unless @have
-            @cond.broadcast
+            @cond.signal
             @have = true
             @value = message
-            return true
+            return
           end
 
           remaining = deadline - Time.now.to_f
-          return false
+          return yield if remaining < 0
 
           @cond.wait(@mu, remaining)
         }
