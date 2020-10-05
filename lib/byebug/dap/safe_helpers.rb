@@ -19,7 +19,7 @@ module Byebug
         end
       end
 
-      def safe(target, method, *args)
+      def safe(target, method, *args, &block)
         if target.respond_to?(method)
           target.__send__(method, *args)
         else
@@ -27,7 +27,7 @@ module Byebug
         end
       rescue StandardError => e
         STDERR.puts "\n! #{e.message} (#{e.class})", *e.backtrace if Debug.evaluate
-        yield
+        block.parameters.empty? ? yield : yield(e)
       end
 
       def prepare_value(val)
@@ -49,12 +49,6 @@ module Byebug
         }, :call) { [] }
 
         return str, typ, named, indexed
-      end
-
-      def prepare_value_from(target, method, *args, &block)
-        val = safe(target, method, *args) { return yield }
-        str, typ, named, indexed = prepare_value(val, &block)
-        return val, str, typ, named, indexed
       end
     end
   end

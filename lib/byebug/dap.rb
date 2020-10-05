@@ -3,9 +3,9 @@ require 'byebug'
 require 'byebug/core'
 require 'byebug/remote'
 
+require_relative 'dap/channel'
 require_relative 'dap/handles'
 require_relative 'dap/invalid_request_argument_error'
-require_relative 'dap/message_channel'
 require_relative 'dap/safe_helpers'
 
 require_relative 'dap/server'

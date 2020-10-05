@@ -180,20 +180,47 @@ module Byebug
         last = count ? first + count : vars.size
         last = vars.size unless last < vars.size
 
-        vars[first...last].map { |var, get| prepare_value_response(thnum, frnum, :variable, get, :call, var, name: var) }
+        vars[first...last].map { |var, get| prepare_value_response(thnum, frnum, :variable, name: var) { get.call(var) } }
       end
 
       def evaluate(frameId, expression)
+        return prepare_value_response(0, 0, :evaluate) { TOPLEVEL_BINDING.eval(expression) } unless frameId
+
         frame, thnum, frnum = resolve_frame_id(frameId)
         return unless frame
 
-        prepare_value_response(thnum, frnum, :evaluate, frame._binding, :eval, expression)
+        prepare_value_response(thnum, frnum, :evaluate) { frame._binding.eval(expression) }
       end
 
       private
 
-      def prepare_value_response(thnum, frnum, kind, target, method, *margs, name: nil)
-        raw, value, type, named, indexed = prepare_value_from(target, method, *margs) { [nil, "*Error in evaluation*", nil, [], []] }
+      def describe_thread(context)
+        if context.thread.name
+          "##{context.thnum} (#{context.thread.name})"
+        else
+          "##{context.thnum}"
+        end
+      end
+
+      def prepare_value_response(thnum, frnum, kind, name: nil, &block)
+        err = nil
+        if thnum == 0
+          raw = safe(block, :call) { |e| err = e; nil }
+        else
+          processor = find_thread(thnum).__send__(:processor)
+          raw = safe(-> { processor.execute(&block) }, :call) { |e| err = e; nil }
+        end
+
+        if err.nil?
+          value, type, named, indexed = prepare_value(raw) { next "*Error in evaluation*", nil, [], [] }
+        else
+          type, named, indexed = nil, [], []
+          if err.is_a?(CommandProcessor::TimeoutError)
+            value = "*Thread #{describe_thread err.context} unresponsive*"
+          else
+            value = "*Error in evaluation*"
+          end
+        end
 
         case kind
         when :variable

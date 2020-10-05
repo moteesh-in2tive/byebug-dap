@@ -1,6 +1,6 @@
 module Byebug
   module DAP
-    class MessageChannel
+    class Channel
       def initialize
         @mu = Mutex.new
         @cond = ConditionVariable.new
@@ -29,8 +29,8 @@ module Byebug
         }
       end
 
-      def push(message, timeout)
-        deadline = timeout + Time.now.to_f
+      def push(message, timeout: nil)
+        deadline = timeout + Time.now.to_f unless timeout.nil?
 
         synchronize_loop {
           raise RuntimeError, "Send on closed channel" if @closed
@@ -42,10 +42,15 @@ module Byebug
             return
           end
 
-          remaining = deadline - Time.now.to_f
-          return yield if remaining < 0
+          if timeout.nil?
+            @cond.wait(@mu)
 
-          @cond.wait(@mu, remaining)
+          else
+            remaining = deadline - Time.now.to_f
+            return yield if remaining < 0
+
+            @cond.wait(@mu, remaining)
+          end
         }
       end
 
