@@ -11,6 +11,6 @@ Gem::Specification.new do |s|
     s.homepage    = 'https://gitlab.com/firelizzard/byebug-dap'
     s.license     = 'Apache-2.0'
 
-    s.add_runtime_dependency 'byebug'
-    s.add_runtime_dependency 'ruby-dap'
+    s.add_runtime_dependency 'byebug', '~> 11.1'
+    s.add_runtime_dependency 'ruby-dap', '~> 0.1.0'
   end
