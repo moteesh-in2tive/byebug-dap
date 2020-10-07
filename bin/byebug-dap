@@ -59,6 +59,9 @@ else
 end
 
 begin
+  STDERR.puts "Starting DAP"
+  STDERR.flush
+
   if options[:wait]
     Byebug.start_dap(host, port) { require File.realpath(program) }
   else
