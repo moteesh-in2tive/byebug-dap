@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
     s.name        = 'byebug-dap'
-    s.version     = '0.0.0'
-    s.date        = '2020-09-30'
+    s.version     = '0.1.0'
+    s.date        = '2020-10-07'
     s.summary     = 'Debug Adapter Protocol for Byebug'
     s.description = 'Implements a Debug Adapter Protocol interface for Byebug'
     s.authors     = ['Ethan Reesor']
