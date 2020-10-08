@@ -5,7 +5,7 @@ Gem::Specification.new do |s|
     s.description = 'Implements a Debug Adapter Protocol interface for Byebug'
     s.authors     = ['Ethan Reesor']
     s.email       = 'ethan.reesor@gmail.com'
-    s.files       = Dir.glob('{bin,lib}/**/*.rb') + %w(LICENSE AUTHORS README.md)
+    s.files       = Dir.glob('{bin,lib}/**/*.rb') + %w(LICENSE AUTHORS README.md CHANGELOG.md)
     s.executables = ['byebug-dap']
     s.homepage    = 'https://gitlab.com/firelizzard/byebug-dap'
     s.license     = 'Apache-2.0'
