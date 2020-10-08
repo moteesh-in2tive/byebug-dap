@@ -11,34 +11,26 @@ module Byebug
       end
 
       def run
-        @trace.enable
-
         loop do
           @request = @interface.receive
           process_command @request
-
-        rescue InvalidRequestArgumentError => e
-          handle_error e
-
-        rescue CommandProcessor::TimeoutError => e
-          respond! success: false, message: "Debugger on thread ##{e.context.thnum} is not responding"
         end
 
       rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, DisconnectError
         STDERR.puts "\nClient disconnected"
 
-      rescue StandardError => e
-        STDERR.puts "\n! #{e.message} (#{e.class})", *e.backtrace
-
       ensure
         Byebug.mode = :off
         Byebug.stop
         @interface.socket.close
+        @trace.disable
       end
 
       private
 
       def process_trace(trace)
+        return unless Byebug.started?
+
         ctx = Byebug.contexts.find { |c| c.thread == Thread.current }
 
         case trace.event
@@ -47,10 +39,9 @@ module Byebug
         when :thread_end
           @interface.event! 'thread', reason: 'exited', threadId: ctx.thnum
         end
-      end
 
-      def running!
-        raise InvalidRequestArgumentError.new(:not_running, nil) unless Byebug.started?
+      rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
+        # client disconnected, ignore error
       end
 
       def process_command(request)
@@ -83,6 +74,7 @@ module Byebug
 
           Byebug.mode = :attached
           Byebug.start
+          @trace.enable
 
           @signal_start.call(:attach) if @signal_start
 
@@ -95,6 +87,7 @@ module Byebug
           unless request.arguments.noDebug
             Byebug.mode = :launched
             Byebug.start
+            @trace.enable
           end
 
           @signal_start.call(:launch) if @signal_start
@@ -109,7 +102,10 @@ module Byebug
           return
         end
 
-        running!
+        unless Byebug.started?
+          respond! success: false, message: "Debugger is not running"
+          return
+        end
 
         case request.command
         when 'pause', 'next', 'stepIn', 'stepOut', 'continue'
@@ -179,6 +175,12 @@ module Byebug
           # "To clear all breakpoint for a source, specify an empty array.
           # "When a breakpoint is hit, a ‘stopped’ event (with reason ‘breakpoint’) is generated.
 
+          unless File.exist?(request.arguments.source.path)
+            # file doesn't exist, no breakpoints set
+            respond! body: ::DAP::SetBreakpointsResponseBody.new(breakpoints: [])
+            return
+          end
+
           path = File.realpath(request.arguments.source.path)
           ::Byebug.breakpoints.each { |bp| ::Byebug::Breakpoint.remove(bp.id) if bp.source == path }
 
@@ -199,6 +201,35 @@ module Byebug
         else
           respond! success: false, message: 'Invalid command'
         end
+
+      rescue InvalidRequestArgumentError => e
+        case e.error
+        when :missing_argument
+          respond! success: false, message: "Missing #{e.scope}"
+
+        when :missing_entry
+          respond! success: false, message: "Invalid #{e.scope} #{e.value}"
+
+        when :missing_thread
+          respond! success: false, message: "Cannot locate thread ##{e.value}"
+
+        when :missing_frame
+          respond! success: false, message: "Cannot locate frame ##{e.value}"
+
+        when :invalid_entry
+          respond! success: false, message: "Error resolving #{e.scope}: #{e.value}"
+
+        else
+          respond! success: false, message: "An internal error occured"
+          STDERR.puts "#{e.message} (#{e.class})", *e.backtrace
+        end
+
+      rescue CommandProcessor::TimeoutError => e
+        respond! success: false, message: "Debugger on thread ##{e.context.thnum} is not responding"
+
+      rescue StandardError => e
+        respond! success: false, message: "An internal error occured"
+        STDERR.puts "#{e.message} (#{e.class})", *e.backtrace
       end
 
       def respond!(body = {}, success: true, message: 'Success', **values)
@@ -210,31 +241,6 @@ module Byebug
           message: message,
           body: body,
           **values)
-      end
-
-      def handle_error(ex)
-        case ex.error
-        when :not_running
-          respond! success: false, message: "Debugger is not running"
-
-        when :missing_argument
-          respond! success: false, message: "Missing #{ex.scope}"
-
-        when :missing_entry
-          respond! success: false, message: "Invalid #{ex.scope} #{ex.value}"
-
-        when :missing_thread
-          respond! success: false, message: "Cannot locate thread ##{ex.value}"
-
-        when :missing_frame
-          respond! success: false, message: "Cannot locate frame ##{ex.value}"
-
-        when :invalid_entry
-          respond! success: false, message: "Error resolving #{ex.scope}: #{ex.value}"
-
-        else
-          raise "Unknown internal error: #{err}"
-        end
       end
     end
   end
