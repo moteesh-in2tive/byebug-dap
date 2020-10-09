@@ -78,7 +78,7 @@ module Byebug
           frame = ::Byebug::Frame.new(ctx, i)
           ::DAP::StackFrame.new(
             id: frame_ids << [ctx.thnum, i],
-            name: frame.deco_call,
+            name: frame_name(frame),
             source: ::DAP::Source.new(
               name: File.basename(frame.file),
               path: File.expand_path(frame.file)),
@@ -193,6 +193,12 @@ module Byebug
       end
 
       private
+
+      def frame_name(frame)
+        frame.deco_call
+      rescue
+        frame.deco_block + frame.deco_class + frame.deco_method + "(?)"
+      end
 
       def describe_thread(context)
         if context.thread.name
