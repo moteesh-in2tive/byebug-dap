@@ -20,13 +20,11 @@ module Byebug
         public :<<, :bytes, :chars, :close_read, :close_write, :codepoints, :each, :each_byte, :each_char, :each_codepoint, :each_line, :getbyte, :getc, :gets, :lines, :pread, :print, :printf, :putc, :puts, :pwrite, :read, :read_nonblock, :readbyte, :readchar, :readline, :readlines, :readpartial, :sysread, :syswrite, :ungetbyte, :ungetc, :write, :write_nonblock
       end
 
-      def initialize(&block)
+      def initialize
         @started = false
-        if block_given?
-          @on_start = block
-          @mu = Mutex.new
-          @cond = ConditionVariable.new
-        end
+        @mu = Mutex.new
+        @cond = ConditionVariable.new
+        @configured = false
       end
 
       def start(host, port = 0)
@@ -61,6 +59,16 @@ module Byebug
         launch STDIO.new
       end
 
+      def wait_for_client
+        @mu.synchronize do
+          loop do
+            return if @configured
+
+            @cond.wait(@mu)
+          end
+        end
+      end
+
       private
 
       def launch(server)
@@ -74,19 +82,19 @@ module Byebug
           end
         end
 
-        return unless defined?(@on_start)
-
-        @mu.synchronize { @cond.wait(@mu) }
-
-        @on_start.call
+        self
       end
 
       def debug(session)
         Context.interface = Byebug::DAP::Interface.new(session)
         Context.processor = Byebug::DAP::CommandProcessor
 
-        signal_start = ->(_) { @mu.synchronize { @cond.signal } } if defined?(@on_start)
-        Byebug::DAP::Controller.new(Context.interface, signal_start).run
+        Byebug::DAP::Controller.new(Context.interface) do
+          @mu.synchronize do
+            @configured = true
+            @cond.broadcast
+          end
+        end.run
       end
     end
   end

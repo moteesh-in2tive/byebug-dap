@@ -62,12 +62,13 @@ begin
   STDERR.puts "Starting DAP"
   STDERR.flush
 
+  server = Byebug.start_dap(host, port)
+
   if options[:wait]
-    Byebug.start_dap(host, port) { require File.realpath(program) }
-  else
-    Byebug.start_dap(host, port)
-    require File.realpath(program)
+    server.wait_for_client
   end
+
+  require File.realpath(program)
 
 ensure
   File.delete(port) if File.exist?(port) if host == :unix

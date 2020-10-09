@@ -1,9 +1,9 @@
 module Byebug
   module DAP
     class Controller
-      def initialize(interface, signal_start = nil)
+      def initialize(interface, &block)
         @interface = interface
-        @signal_start = signal_start
+        @on_configured = block
 
         @trace = TracePoint.new(:thread_begin, :thread_end) { |t| process_trace t }
       end
@@ -90,8 +90,6 @@ module Byebug
           Byebug.start
           @trace.enable
 
-          @signal_start.call(:attach) if @signal_start
-
           respond!
           return
 
@@ -105,7 +103,6 @@ module Byebug
           end
 
           @exit_on_disconnect = true
-          @signal_start.call(:launch) if @signal_start
 
           respond!
           return
@@ -113,6 +110,8 @@ module Byebug
         when 'configurationDone'
           # "This optional request indicates that the client has finished initialization of the debug adapter.
 
+
+          @on_configured&.call
           respond!
           return
 
