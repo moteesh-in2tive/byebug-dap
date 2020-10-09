@@ -26,6 +26,7 @@ OptionParser.new do |opts|
   opts.on("-f", "--[no-]force", "When listening on a unix socket, delete the socket if it exists") { |v| options[:force] = v }
   opts.on("--debug-protocol", "Debug DAP") { |v| Byebug::DAP::Debug.protocol = true if v }
   opts.on("--debug-evaluate", "Debug variable evaluation") { |v| Byebug::DAP::Debug.evaluate = true if v }
+  opts.on("--on-start CODE", "Code to print once the debugger is available") { |v| options[:start_code] = v }
 end.parse!
 
 program = next_arg
@@ -59,14 +60,19 @@ else
 end
 
 begin
-  STDERR.puts "Starting DAP"
-  STDERR.flush
+  STDERR.print "Starting DAP... " unless options[:start_code]
 
   server = Byebug.start_dap(host, port)
 
+  STDERR.puts options[:start_code] if options[:start_code]
+  STDERR.flush
+
   if options[:wait]
+    STDERR.print "waiting for debugger... " unless options[:start_code]
     server.wait_for_client
   end
+
+  STDERR.puts "ok" unless options[:start_code]
 
   require File.realpath(program)
 
