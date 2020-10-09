@@ -1,8 +1,6 @@
 module Byebug
   module DAP
     class Controller
-      class DisconnectError < StandardError; end
-
       def initialize(interface, signal_start = nil)
         @interface = interface
         @signal_start = signal_start
@@ -13,10 +11,11 @@ module Byebug
       def run
         loop do
           @request = @interface.receive
-          process_command @request
+          result = process_command @request
+          return if result == :stop
         end
 
-      rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, DisconnectError
+      rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
         STDERR.puts "\nClient disconnected"
 
       ensure
@@ -80,7 +79,7 @@ module Byebug
           # "This behavior can be controlled with the ‘terminateDebuggee’ argument (if supported by the debug adapter).
 
           respond!
-          raise DisconnectError
+          return :stop
 
         when 'attach'
           # "The attach request is sent from the client to the debug adapter to attach to a debuggee that is already running.
