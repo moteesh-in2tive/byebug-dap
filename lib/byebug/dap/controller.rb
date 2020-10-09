@@ -46,6 +46,19 @@ module Byebug
 
       def process_command(request)
         case request.command
+        when 'attach', 'launch'
+          if Byebug.started?
+            respond! success: false, message: "Cannot #{request.command} - debugger is already running"
+            return
+          end
+        when 'pause', 'next', 'stepIn', 'stepOut', 'continue', 'evaluate', 'variables', 'scopes', 'threads', 'stackTrace'
+          unless Byebug.started?
+            respond! success: false, message: "Cannot #{request.command} - debugger is not running"
+            return
+          end
+        end
+
+        case request.command
         when 'initialize'
           # "The ‘initialize’ request is sent as the first request from the client to the debug adapter
           # "in order to configure it with client capabilities and to retrieve capabilities from the debug adapter.
@@ -100,14 +113,7 @@ module Byebug
 
           respond!
           return
-        end
 
-        unless Byebug.started?
-          respond! success: false, message: "Debugger is not running"
-          return
-        end
-
-        case request.command
         when 'pause', 'next', 'stepIn', 'stepOut', 'continue'
           ctx = @interface.find_thread(request.arguments.threadId)
           ctx.interrupt if request.command == 'pause'
