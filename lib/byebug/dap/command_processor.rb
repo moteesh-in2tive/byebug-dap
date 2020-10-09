@@ -103,12 +103,10 @@ module Byebug
       def stopped!
         case context.stop_reason
         when :breakpoint
-          number = Byebug.breakpoints.index(@at_breakpoint) + 1
-
           args = {
             reason: 'breakpoint',
             description: 'Hit breakpoint',
-            text: "Stopped by breakpoint #{number} at #{context.frame.file}:#{context.frame.line}",
+            text: "Stopped by breakpoint at #{context.frame.file}:#{context.frame.line}",
           }
 
         when :catchpoint
