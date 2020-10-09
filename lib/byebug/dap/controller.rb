@@ -21,9 +21,7 @@ module Byebug
       ensure
         exit if @exit_on_disconnect
 
-        Byebug.mode = :off
-        Byebug.stop
-        @interface.socket.close
+        @interface.stop!
         @trace.disable
       end
 

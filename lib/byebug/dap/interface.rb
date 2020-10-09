@@ -9,6 +9,12 @@ module Byebug
         @socket = socket
       end
 
+      def stop!
+        Byebug.mode = :off
+        Byebug.stop
+        socket.close
+      end
+
       def <<(message)
         STDERR.puts "> #{message.to_wire}" if Debug.protocol
         message.validate!
