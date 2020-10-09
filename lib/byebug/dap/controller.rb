@@ -19,6 +19,8 @@ module Byebug
         STDERR.puts "\nClient disconnected"
 
       ensure
+        exit if @exit_on_disconnect
+
         Byebug.mode = :off
         Byebug.stop
         @interface.socket.close
@@ -102,6 +104,7 @@ module Byebug
             @trace.enable
           end
 
+          @exit_on_disconnect = true
           @signal_start.call(:launch) if @signal_start
 
           respond!
