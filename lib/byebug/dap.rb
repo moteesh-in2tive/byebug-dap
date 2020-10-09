@@ -4,6 +4,7 @@ require 'byebug/core'
 require 'byebug/remote'
 
 require_relative 'dap/channel'
+require_relative 'dap/child_spawned_event_body'
 require_relative 'dap/handles'
 require_relative 'dap/invalid_request_argument_error'
 require_relative 'dap/safe_helpers'

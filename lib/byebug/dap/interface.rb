@@ -3,10 +3,30 @@ module Byebug
     class Interface
       include SafeHelpers
 
+      @@children = []
+
+      def self.child_spawned(name, pid, socket)
+        child = ChildSpawnedEventBody.new(name: name, pid: pid, socket: socket)
+        @@children << child
+
+        interface = Context.interface
+        interface.event! child if interface.is_a?(Byebug::DAP::Interface)
+
+        return true
+
+      rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
+        return false
+      end
+
       attr_reader :socket
 
       def initialize(socket)
         @socket = socket
+
+        begin
+          @@children.each { |c| event! c }
+        rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
+        end
       end
 
       def stop!
@@ -16,19 +36,25 @@ module Byebug
       end
 
       def <<(message)
-        STDERR.puts "> #{message.to_wire}" if Debug.protocol
+        STDERR.puts "#{Process.pid} > #{message.to_wire}" if Debug.protocol
         message.validate!
         socket.write ::DAP::Encoding.encode(message)
       end
 
       def event!(event, **values)
-        body = ::DAP.const_get("#{event[0].upcase}#{event[1..]}EventBody").new(values) unless values.empty?
+        if (cls = event.class.name.split('::').last) && cls.end_with?('EventBody')
+          body, event = event, cls[0].downcase + cls[1...-9]
+
+        elsif event.is_a?(String) && !values.empty?
+          body = ::DAP.const_get("#{event[0].upcase}#{event[1..]}EventBody").new(values)
+        end
+
         self << ::DAP::Event.new(event: event, body: body)
       end
 
       def receive
         m = ::DAP::Encoding.decode(socket)
-        STDERR.puts "< #{m.to_wire}" if Debug.protocol
+        STDERR.puts "#{Process.pid} < #{m.to_wire}" if Debug.protocol
         m
       end
 
