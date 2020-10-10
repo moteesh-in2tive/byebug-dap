@@ -2,7 +2,6 @@ module Byebug
   module DAP
     class Server
       def initialize(capture: true, forward: true)
-        @@main_process ||= Process.pid
         @started = false
         @mu = Mutex.new
         @cond = ConditionVariable.new
