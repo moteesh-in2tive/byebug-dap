@@ -3,14 +3,15 @@
 ## Upcoming
 
 - Support output capture
+- Support setting function breakpoints
 
 ## 0.1.2
 
 - Fix possible failure when a breakpoint is hit but can't be resolved
 - Fix possible failure when frame arguments can't be evaluated
 - Exit on disconnect when started by 'launch'
-- Expose `Server#wait_for_client` instead of passing a block
-- Expose `Interface#stop!` to allow the debugee to stop
+- Expose `Byebug::DAP::Server#wait_for_client` instead of passing a block
+- Expose `Byebug::DAP#stop!` to allow the debugee to stop
 - Support specifying a start sequence with `--on-start CODE`
 - Support for child processes
 

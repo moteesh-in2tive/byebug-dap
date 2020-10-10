@@ -74,7 +74,7 @@ module Byebug
           debug stream
 
         ensure
-          @ios.restore
+          @ios&.restore
         end
 
         self
@@ -87,7 +87,7 @@ module Byebug
           end
 
         ensure
-          @ios.restore
+          @ios&.restore
         end
 
         self

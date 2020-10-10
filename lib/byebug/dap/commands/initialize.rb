@@ -10,7 +10,8 @@ module Byebug::DAP
 
     def execute
       respond! body: ::DAP::Capabilities.new(
-        supportsConfigurationDoneRequest: true)
+        supportsConfigurationDoneRequest: true,
+        supportsFunctionBreakpoints: true)
 
       event! 'initialized'
     end
