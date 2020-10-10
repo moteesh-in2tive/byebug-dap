@@ -5,15 +5,14 @@ module Byebug::DAP
     register!
 
     def execute
-      path = args.source.path
-      if File.readable?(path)
-        respond! body: ::DAP::SourceResponseBody.new(content: IO.read(path))
+      if File.readable?(args.source.path)
+        respond! body: ::DAP::SourceResponseBody.new(content: IO.read(args.source.path))
 
-      elsif File.exist?(path)
-        respond! success: false, message: "Source file '#{path}' exists but cannot be read"
+      elsif File.exist?(args.source.path)
+        respond! success: false, message: "Source file '#{args.source.path}' exists but cannot be read"
 
       else
-        respond! success: false, message: "No source file available for '#{path}'"
+        respond! success: false, message: "No source file available for '#{args.source.path}'"
       end
     end
   end

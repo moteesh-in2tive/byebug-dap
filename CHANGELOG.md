@@ -4,6 +4,7 @@
 
 - Support output capture
 - Support setting function breakpoints
+- Support breakpoint locations request
 
 ## 0.1.2
 

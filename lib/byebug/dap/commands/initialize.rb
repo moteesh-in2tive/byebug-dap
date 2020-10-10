@@ -9,9 +9,11 @@ module Byebug::DAP
     register!
 
     def execute
-      respond! body: ::DAP::Capabilities.new(
+      respond! body: {
         supportsConfigurationDoneRequest: true,
-        supportsFunctionBreakpoints: true)
+        supportsFunctionBreakpoints: true,
+        supportsBreakpointLocationsRequest: true,
+      }
 
       event! 'initialized'
     end
