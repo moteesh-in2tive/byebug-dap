@@ -12,14 +12,19 @@ module Byebug
         end
       end
 
-      attr_reader :context, :interface
+      attr_reader :context
+      attr_writer :pause_requested
 
-      def initialize(context, interface)
+      def initialize(context, session)
         @context = context
-        @interface = interface
+        @session = session
         @requests = Channel.new
         @exec_mu = Mutex.new
         @exec_ch = Channel.new
+      end
+
+      def log(*args)
+        @session.log(*args)
       end
 
       def <<(message)
@@ -54,50 +59,13 @@ module Byebug
             next
           end
 
-          case request.command
-          when 'continue'
-            # "The request starts the debuggee to run again.
-
-            break
-
-          when 'pause'
-            # "The request suspends the debuggee.
-            # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘pause’) after the thread has been paused successfully.
-
-            @pause_requested = true
-
-          when 'next'
-            # "The request starts the debuggee to run again for one step.
-            # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
-
-            context.step_over(1, context.frame.pos)
-            break
-
-          when 'stepIn'
-            # "The request starts the debuggee to step into a function/method if possible.
-            # "If it cannot step into a target, ‘stepIn’ behaves like ‘next’.
-            # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
-            # "If there are multiple function/method calls (or other targets) on the source line,
-            # "the optional argument ‘targetId’ can be used to control into which target the ‘stepIn’ should occur.
-            # "The list of possible targets for a given source line can be retrieved via the ‘stepInTargets’ request.
-
-            context.step_into(1, context.frame.pos)
-            break
-
-          when 'stepOut'
-            # "The request starts the debuggee to run again for one step.
-            # "The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
-
-            context.step_out(context.frame.pos + 1, false)
-            context.frame = 0
-            break
-          end
+          break if ContextualCommand.execute(@session, request, self) == :stop
         end
 
-        interface.invalidate_handles!
+        @session.invalidate_handles!
 
       rescue StandardError => e
-        STDERR.puts "\n! #{e.message} (#{e.class})", *e.backtrace
+        log "\n! #{e.message} (#{e.class})", *e.backtrace
       end
 
       def stopped!
@@ -132,10 +100,10 @@ module Byebug
           end
 
         else
-          STDERR.puts "Stopped for unknown reason: #{context.stop_reason}"
+          log "Stopped for unknown reason: #{context.stop_reason}"
         end
 
-        interface.event! 'stopped', threadId: context.thnum, **args if args
+        @session.event! 'stopped', threadId: context.thnum, **args if args
 
         process_requests
       end
@@ -153,7 +121,7 @@ module Byebug
       end
 
       # def at_tracing
-      #   interface.puts "Tracing: #{context.full_location}"
+      #   @session.puts "Tracing: #{context.full_location}"
 
       #   # run_auto_cmds(2)
       # end

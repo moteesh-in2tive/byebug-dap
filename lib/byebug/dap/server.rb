@@ -1,26 +1,8 @@
 module Byebug
   module DAP
     class Server
-      class STDIO
-        extend Forwardable
-
-        def initialize
-          @in = STDIN
-          @out = STDOUT
-          STDIN.sync = true
-          STDOUT.sync = true
-        end
-
-        def close; @in.close; @out.close; end
-        def flush; @in.flush; @out.flush; end
-        def fsync; @in.fsync; @out.fsync; end
-
-        def_delegators :@in, :close_read, :bytes, :chars, :codepoints, :each, :each_byte, :each_char, :each_codepoint, :each_line, :getbyte, :getc, :gets, :lines, :pread, :print, :printf, :read, :read_nonblock, :readbyte, :readchar, :readline, :readlines, :readpartial, :sysread, :ungetbyte, :ungetc
-        def_delegators :@out, :<<, :close_write, :putc, :puts, :pwrite, :syswrite, :write, :write_nonblock
-        public :<<, :bytes, :chars, :close_read, :close_write, :codepoints, :each, :each_byte, :each_char, :each_codepoint, :each_line, :getbyte, :getc, :gets, :lines, :pread, :print, :printf, :putc, :puts, :pwrite, :read, :read_nonblock, :readbyte, :readchar, :readline, :readlines, :readpartial, :sysread, :syswrite, :ungetbyte, :ungetc, :write, :write_nonblock
-      end
-
-      def initialize
+      def initialize(capture: true, forward: true)
+        @@main_process ||= Process.pid
         @started = false
         @mu = Mutex.new
         @cond = ConditionVariable.new
@@ -85,16 +67,24 @@ module Byebug
         self
       end
 
-      def debug(session)
-        Context.interface = Byebug::DAP::Interface.new(session)
-        Context.processor = Byebug::DAP::CommandProcessor
-
-        Byebug::DAP::Controller.new(Context.interface) do
+      def debug(connection)
+        session = Byebug::DAP::Session.new(connection) do
           @mu.synchronize do
             @configured = true
             @cond.broadcast
           end
-        end.run
+        end
+
+        session.execute
+
+      rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
+        STDERR.puts "Client disconnected"
+
+      rescue StandardError => e
+        STDERR.puts "#{e.message} (#{e.class})", *e.backtrace
+
+      ensure
+        session.stop!
       end
     end
   end

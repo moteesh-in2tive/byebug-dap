@@ -11,11 +11,12 @@ def next_arg
   arg = ARGV.pop
   return arg if arg
 
-  STDERR.puts USAGE
+  LOG.puts USAGE
   exit!
 end
 
 options = {}
+
 OptionParser.new do |opts|
   opts.banner = USAGE
 
@@ -27,7 +28,11 @@ OptionParser.new do |opts|
   opts.on("--debug-protocol", "Debug DAP") { |v| Byebug::DAP::Debug.protocol = true if v }
   opts.on("--debug-evaluate", "Debug variable evaluation") { |v| Byebug::DAP::Debug.evaluate = true if v }
   opts.on("--on-start CODE", "Code to print once the debugger is available") { |v| options[:start_code] = v }
+
+  opts.on("--log FD", "Log to the specified file descriptor") { |v| Kernel::LOG = IO.new(v.to_i) }
 end.parse!
+
+Kernel::LOG = STDERR.dup unless defined?(Kernel::LOG)
 
 program = next_arg
 if program == '-'
@@ -55,26 +60,30 @@ elsif options[:unix]
   end
 
 else
-  STDERR.puts USAGE, "One of --stdio, --listen, or --unix is required"
+  LOG.puts USAGE, "One of --stdio, --listen, or --unix is required"
   exit!
 end
 
 begin
-  STDERR.print "Starting DAP... " unless options[:start_code]
+  LOG.print "Starting DAP... " unless options[:start_code]
 
-  server = Byebug.start_dap(host, port)
+  server = Byebug::DAP::Server.start(host, port)
 
-  STDERR.puts options[:start_code] if options[:start_code]
-  STDERR.flush
+  LOG.puts options[:start_code] if options[:start_code]
 
   if options[:wait]
-    STDERR.print "waiting for debugger... " unless options[:start_code]
+    LOG.print "waiting for debugger... " unless options[:start_code]
+    hINT = Signal.trap("INT") { LOG.puts; exit }
     server.wait_for_client
+    Signal.trap("INT", hINT)
   end
 
-  STDERR.puts "ok" unless options[:start_code]
+  LOG.puts "ok" unless options[:start_code]
 
   require File.realpath(program)
+
+rescue => e
+  LOG.puts "#{e.message} (#{e.class.name})", *e.backtrace
 
 ensure
   File.delete(port) if File.exist?(port) if host == :unix

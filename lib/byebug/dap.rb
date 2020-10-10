@@ -3,32 +3,52 @@ require 'byebug'
 require 'byebug/core'
 require 'byebug/remote'
 
-require_relative 'dap/channel'
-require_relative 'dap/child_spawned_event_body'
-require_relative 'dap/handles'
-require_relative 'dap/invalid_request_argument_error'
-require_relative 'dap/safe_helpers'
+Byebug::DAP = Module.new
 
-require_relative 'dap/server'
+# load helpers
+Dir[File.join(__dir__, 'dap', 'helpers', '*.rb')].each { |file| require file }
+
+# load command base classes
+require_relative 'dap/command'
+require_relative 'dap/contextual_command'
+
+# load commands
+Dir[File.join(__dir__, 'dap', 'commands', '*.rb')].each { |file| require file }
+
+# load everything else
 require_relative 'dap/command_processor'
-require_relative 'dap/controller'
-require_relative 'dap/interface'
+require_relative 'dap/session'
+require_relative 'dap/server'
 
 module Byebug
-  module DAP
-    module Debug
-      class << self
-        @protocol = false
-        @evaluate = false
-
-        attr_accessor :protocol, :evaluate
-      end
-    end
-  end
-
   class << self
     def start_dap(host, port = 0, &block)
       DAP::Server.new(&block).start(host, port)
     end
+  end
+end
+
+module Byebug::DAP
+  class << self
+    def child_spawned(*args)
+      Session.child_spawned(*args)
+    end
+
+    def stop!
+      interface = Byebug::Context.interface
+      return false unless interface.is_a?(Session)
+
+      interface.stop!
+      true
+    end
+  end
+end
+
+module Byebug::DAP::Debug
+  class << self
+    @protocol = false
+    @evaluate = false
+
+    attr_accessor :protocol, :evaluate
   end
 end
