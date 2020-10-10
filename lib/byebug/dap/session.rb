@@ -18,8 +18,9 @@ module Byebug
         return false
       end
 
-      def initialize(connection, &block)
+      def initialize(connection, ios, &block)
         @connection = connection
+        @ios = ios
         @on_configured = block
         @pid = Process.pid
         @trace = TracePoint.new(:thread_begin, :thread_end) { |t| process_trace t }
@@ -28,7 +29,15 @@ module Byebug
       end
 
       def log(*args)
-        STDERR.puts(*args)
+        logger =
+          if @ios
+            @ios.log
+          elsif defined?(LOG)
+            LOG
+          else
+            STDERR
+          end
+        logger.puts(*args)
       end
 
       def execute

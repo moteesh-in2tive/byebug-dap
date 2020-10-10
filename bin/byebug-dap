@@ -28,6 +28,8 @@ OptionParser.new do |opts|
   opts.on("--debug-protocol", "Debug DAP") { |v| Byebug::DAP::Debug.protocol = true if v }
   opts.on("--debug-evaluate", "Debug variable evaluation") { |v| Byebug::DAP::Debug.evaluate = true if v }
   opts.on("--on-start CODE", "Code to print once the debugger is available") { |v| options[:start_code] = v }
+  opts.on("--capture-output", "Capture stdout and stderr") { |v| options[:capture_output] = v }
+  opts.on("--supress-output", "Supress stdout and stderr when capturing") { |v| options[:suppress_output] = v }
 
   opts.on("--log FD", "Log to the specified file descriptor") { |v| Kernel::LOG = IO.new(v.to_i) }
 end.parse!
@@ -67,7 +69,8 @@ end
 begin
   LOG.print "Starting DAP... " unless options[:start_code]
 
-  server = Byebug::DAP::Server.start(host, port)
+  server = Byebug::DAP::Server.new(capture: options[:capture_output], forward: !options[:suppress_output])
+  server.start(host, port)
 
   LOG.puts options[:start_code] if options[:start_code]
 

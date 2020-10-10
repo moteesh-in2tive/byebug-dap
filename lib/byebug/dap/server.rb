@@ -7,6 +7,8 @@ module Byebug
         @mu = Mutex.new
         @cond = ConditionVariable.new
         @configured = false
+        @capture = capture
+        @forward = forward
       end
 
       def start(host, port = 0)
@@ -24,21 +26,26 @@ module Byebug
         return if @started
         @started = true
 
-        launch TCPServer.new(host, port)
+        @ios = CapturedIO.new(@forward, @forward) if @capture
+        launch_accept TCPServer.new(host, port)
       end
 
       def start_unix(socket)
         return if @started
         @started = true
 
-        launch UNIXServer.new(socket)
+        @ios = CapturedIO.new(@forward, @forward) if @capture
+        launch_accept UNIXServer.new(socket)
       end
 
       def start_stdio
         return if @started
         @started = true
 
-        launch STDIO.new
+        stream = STDIO.new
+        STDIN.close
+        @ios = CapturedIO.new(false, @forward) if @capture
+        launch stream
       end
 
       def wait_for_client
@@ -53,22 +60,42 @@ module Byebug
 
       private
 
-      def launch(server)
+      def log
+        if @ios
+          @ios.log
+        elsif defined?(LOG)
+          LOG
+        else
+          STDERR
+        end
+      end
+
+      def launch(stream)
         DebugThread.new do
-          if server.respond_to?(:accept)
-            while session = server.accept
-              debug session
-            end
-          else
-            debug server
+          debug stream
+
+        ensure
+          @ios.restore
+        end
+
+        self
+      end
+
+      def launch_accept(server)
+        DebugThread.new do
+          while socket = server.accept
+            debug socket
           end
+
+        ensure
+          @ios.restore
         end
 
         self
       end
 
       def debug(connection)
-        session = Byebug::DAP::Session.new(connection) do
+        session = Byebug::DAP::Session.new(connection, @ios) do
           @mu.synchronize do
             @configured = true
             @cond.broadcast
@@ -78,10 +105,10 @@ module Byebug
         session.execute
 
       rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
-        STDERR.puts "Client disconnected"
+        log.puts "Client disconnected"
 
       rescue StandardError => e
-        STDERR.puts "#{e.message} (#{e.class})", *e.backtrace
+        log.puts "#{e.message} (#{e.class})", *e.backtrace
 
       ensure
         session.stop!

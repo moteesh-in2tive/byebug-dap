@@ -1,5 +1,9 @@
 # Change Log
 
+## Upcoming
+
+- Support output capture
+
 ## 0.1.2
 
 - Fix possible failure when a breakpoint is hit but can't be resolved
