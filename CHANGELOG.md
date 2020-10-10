@@ -5,6 +5,7 @@
 - Support output capture
 - Support setting function breakpoints
 - Support breakpoint locations request
+- Support delayed stack trace loading
 
 ## 0.1.2
 

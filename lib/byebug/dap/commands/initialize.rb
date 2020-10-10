@@ -13,6 +13,7 @@ module Byebug::DAP
         supportsConfigurationDoneRequest: true,
         supportsFunctionBreakpoints: true,
         supportsBreakpointLocationsRequest: true,
+        supportsDelayedStackTraceLoading: true,
       }
 
       event! 'initialized'
