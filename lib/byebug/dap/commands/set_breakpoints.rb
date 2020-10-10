@@ -7,16 +7,14 @@ module Byebug::DAP
     register!
 
     def execute
-      unless File.exist?(args.source.path)
-        # file doesn't exist, no breakpoints set
-        respond! body: ::DAP::SetBreakpointsResponseBody.new(breakpoints: [])
+      return unless path = can_read_file!(args.source.path)
+      lines = potential_breakpoint_lines(path) { |e|
+        respond! success: false, message: "Failed to resolve breakpoints for #{path}"
         return
-      end
+      }
 
-      path = File.realpath(args.source.path)
       ::Byebug.breakpoints.each { |bp| ::Byebug::Breakpoint.remove(bp.id) if bp.source == path }
 
-      lines = ::Byebug::Breakpoint.potential_lines(path)
       verified = []
       args.breakpoints.each do |requested|
         next unless lines.include? requested.line
@@ -28,7 +26,7 @@ module Byebug::DAP
           line: requested.line)
       end
 
-      respond! body: ::DAP::SetBreakpointsResponseBody.new(breakpoints: verified)
+      respond! body: { breakpoints: verified }
     end
   end
 end

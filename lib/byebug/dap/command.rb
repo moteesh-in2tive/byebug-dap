@@ -173,5 +173,24 @@ module Byebug::DAP
 
       return thnum, frnum, named.map { |k| [k, get] }, indexed.map { |k| [k, index] }
     end
+
+    def can_read_file!(path)
+      path = File.realpath(path)
+      return path if File.readable?(path)
+
+      if File.exist?(path)
+        respond! success: false, message: "Source file '#{path}' exists but cannot be read"
+      else
+        respond! success: false, message: "No source file available for '#{path}'"
+      end
+
+      return nil
+    end
+
+    def potential_breakpoint_lines(path)
+      ::Byebug::Breakpoint.potential_lines(path)
+    rescue ScriptError, StandardError => e
+      yield(e)
+    end
   end
 end

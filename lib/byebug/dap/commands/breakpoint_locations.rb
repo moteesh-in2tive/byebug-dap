@@ -5,16 +5,12 @@ module Byebug::DAP
     register!
 
     def execute
-      unless File.readable?(args.source.path)
-        if File.exist?(args.source.path)
-          respond! success: false, message: "Source file '#{args.source.path}' exists but cannot be read"
-        else
-          respond! success: false, message: "No source file available for '#{args.source.path}'"
-        end
+      return unless path = can_read_file!(args.source.path)
+      lines = potential_breakpoint_lines(path) { |e|
+        respond! success: false, message: "Failed to resolve breakpoints for #{path}"
         return
-      end
+      }
 
-      lines = Byebug::Breakpoint.potential_lines(args.source.path)
       unless args.endLine
         if lines.include?(args.line)
           respond! body: { breakpoints: [{ line: args.line }] }
