@@ -16,13 +16,13 @@ module Byebug::DAP
         exceptionId: class_name,
         description: exception_description(ex),
         breakMode: ::DAP::ExceptionBreakMode::ALWAYS,
-        details: details(ex),
+        details: details(ex, '$!'),
       }
     end
 
     private
 
-    def details(ex)
+    def details(ex, eval_name)
       class_name = safe(ex, [:class, :name]) { nil }
       type_name = class_name.split('::').last if class_name
       inner = safe(ex, :cause) { nil }
@@ -31,8 +31,9 @@ module Byebug::DAP
         message: safe(ex, :message) { nil },
         typeName: type_name,
         fullTypeName: class_name,
+        evaluateName: eval_name,
         stackTrace: safe(ex, :backtrace) { [] }.join("\n"),
-        innerException: inner.nil? ? [] : [details(inner)],
+        innerException: inner.nil? ? [] : [details(inner, "#{eval_name}.#{cause}")],
       }
     end
   end

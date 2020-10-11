@@ -47,6 +47,7 @@ module Byebug::DAP
         end
       end
 
+    rescue EOFError, Errno::EBADF
     rescue StandardError => e
       log.puts "#{e.message} (#{e.class})", *e.backtrace
     end

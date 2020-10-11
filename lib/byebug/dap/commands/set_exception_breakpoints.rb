@@ -5,12 +5,8 @@ module Byebug::DAP
 
     FILTERS = [
       {
-        filter: 'standard',
-        label: 'Standard errors',
-      },
-      {
         filter: 'all',
-        label: 'All exceptions',
+        label: 'Exceptions',
       },
     ]
 
@@ -21,8 +17,6 @@ module Byebug::DAP
 
       args.filters.each do |f|
         case f
-        when 'standard'
-          Byebug.add_catchpoint('StandardError')
         when 'all'
           Byebug.add_catchpoint('Exception')
         end

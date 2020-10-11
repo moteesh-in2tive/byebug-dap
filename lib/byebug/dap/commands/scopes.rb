@@ -45,7 +45,7 @@ module Byebug::DAP
       locals = frame.locals
       locals = locals.keys unless locals == [] # BUG in Byebug?
       locals << :self if frame._self.to_s != 'main'
-      locals << :$exception if frame.pos == 0 && !frame.context.processor.last_exception.nil?
+      locals << :$! if frame.pos == 0 && !frame.context.processor.last_exception.nil?
       locals
     end
 

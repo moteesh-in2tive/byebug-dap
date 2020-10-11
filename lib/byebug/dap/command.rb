@@ -159,7 +159,7 @@ module Byebug::DAP
         named, indexed = entry[0], []
         get = ->(key) {
           return frame._self if key == :self
-          return frame.context.processor.last_exception if key == :$exception
+          return frame.context.processor.last_exception if key == :$!
           values ||= frame.locals
           values[key]
         }
