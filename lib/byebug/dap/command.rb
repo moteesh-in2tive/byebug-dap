@@ -108,7 +108,7 @@ module Byebug::DAP
     def execute_on_thread(thnum, block, &on_error)
       return safe(block, :call, &on_error) if thnum == 0 || @context&.thnum == thnum
 
-      p = find_thread(thnum).__send__(:processor)
+      p = find_thread(thnum).processor
       safe(-> { p.execute(&block) }, :call, &on_error)
     end
 

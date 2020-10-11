@@ -24,7 +24,7 @@ module Byebug::DAP
     private
 
     def forward_to_context(ctx)
-      ctx.__send__(:processor) << @request
+      ctx.processor << @request
     end
   end
 end

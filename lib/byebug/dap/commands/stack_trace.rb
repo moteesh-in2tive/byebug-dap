@@ -29,7 +29,7 @@ module Byebug::DAP
             path: File.expand_path(frame.file),
           },
           line: frame.line,
-          column: 1, # TODO real column
+          column: 1,
         }
       end
 

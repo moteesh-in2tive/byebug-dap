@@ -1,5 +1,9 @@
 module Byebug::DAP
   module ValueHelpers
+    def exception_description(ex)
+      safe(-> { "#{ex.message} (#{ex.class.name})" }, :call) { "*Error in evaluation*" }
+    end
+
     def prepare_value(val)
       str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
       cls = safe(val, :class) { nil }
@@ -26,14 +30,14 @@ module Byebug::DAP
       raw = execute_on_thread(thnum, block) { |e| err = e; nil }
 
       if err.nil?
-        value, type, named, indexed = prepare_value(raw) { next "*Error in evaluation*", nil, [], [] }
+        value, type, named, indexed = prepare_value(raw) { |e| next exception_description(e), nil, [], [] }
       else
         type, named, indexed = nil, [], []
         if err.is_a?(CommandProcessor::TimeoutError)
           name = err.context.thread.name
           value = "*Thread ##{err.context.thnum} #{name ? '(' + name + ')' : ''} unresponsive*"
         else
-          value = "*Error in evaluation*"
+          value = exception_description(err)
         end
       end
 

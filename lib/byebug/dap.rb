@@ -26,6 +26,10 @@ module Byebug
       DAP::Server.new(&block).start(host, port)
     end
   end
+
+  class Context
+    public :processor
+  end
 end
 
 module Byebug::DAP
