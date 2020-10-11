@@ -5,11 +5,6 @@ module Byebug::DAP
 
     register!
 
-    def execute
-      super
-      respond!
-    end
-
     def execute_in_context
       @processor.pause_requested = true
     end
@@ -19,6 +14,7 @@ module Byebug::DAP
     def forward_to_context(ctx)
       ctx.interrupt
       super
+      respond!
     end
   end
 end

@@ -5,14 +5,16 @@ module Byebug::DAP
 
     register!
 
-    def execute
-      super
-      respond!
-    end
-
     def execute_in_context
       @context.step_over(1, @context.frame.pos)
       :stop
+    end
+
+    private
+
+    def forward_to_context(ctx)
+      super
+      respond!
     end
   end
 end
