@@ -1,5 +1,7 @@
 module Byebug::DAP
   class Command
+    EVAL_ERROR = "*Error in evaluation*"
+
     include SafeHelpers
 
     def self.command
@@ -105,6 +107,10 @@ module Byebug::DAP
       @request.arguments
     end
 
+    def exception_description(ex)
+      safe(-> { "#{ex.message} (#{ex.class.name})" }, :call) { EVAL_ERROR }
+    end
+
     def execute_on_thread(thnum, block, &on_error)
       return safe(block, :call, &on_error) if thnum == 0 || @context&.thnum == thnum
 
@@ -153,6 +159,7 @@ module Byebug::DAP
         named, indexed = entry[0], []
         get = ->(key) {
           return frame._self if key == :self
+          return frame.context.processor.last_exception if key == :$exception
           values ||= frame.locals
           values[key]
         }

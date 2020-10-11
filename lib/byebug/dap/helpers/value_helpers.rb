@@ -1,9 +1,5 @@
 module Byebug::DAP
   module ValueHelpers
-    def exception_description(ex)
-      safe(-> { "#{ex.message} (#{ex.class.name})" }, :call) { "*Error in evaluation*" }
-    end
-
     def prepare_value(val)
       str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
       cls = safe(val, :class) { nil }

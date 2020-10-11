@@ -14,7 +14,7 @@ module Byebug::DAP
 
       respond! body: {
         exceptionId: class_name,
-        description: safe(-> { "#{ex.message} (#{ex.class.name})" }, :call) { "*Error in evaluation*" },
+        description: exception_description(ex),
         breakMode: ::DAP::ExceptionBreakMode::ALWAYS,
         details: details(ex),
       }

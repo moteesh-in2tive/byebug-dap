@@ -30,6 +30,10 @@ module Byebug
   class Context
     public :processor
   end
+
+  class Frame
+    attr_reader :context
+  end
 end
 
 module Byebug::DAP
