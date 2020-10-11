@@ -45,29 +45,26 @@ module Byebug::DAP
       execute
 
     rescue InvalidRequestArgumentError => e
-      case e.error
-      when String
-        respond! success: false, message: e.error
+      message =
+        case e.error
+        when String
+          e.error
 
-      when :missing_argument
-        respond! success: false, message: "Missing #{e.scope}"
+        when :missing_argument
+          "Argument is unspecified: #{e.scope}"
 
-      when :missing_entry
-        respond! success: false, message: "Invalid #{e.scope} #{e.value}"
+        when :missing_entry
+          "Cannot locate #{e.scope} ##{e.value}"
 
-      when :missing_thread
-        respond! success: false, message: "Cannot locate thread ##{e.value}"
+        when :invalid_entry
+          "Error resolving #{e.scope}: #{e.value}"
 
-      when :missing_frame
-        respond! success: false, message: "Cannot locate frame ##{e.value}"
+        else
+          log "#{e.message} (#{e.class})", *e.backtrace
+          "An internal error occured"
+        end
 
-      when :invalid_entry
-        respond! success: false, message: "Error resolving #{e.scope}: #{e.value}"
-
-      else
-        respond! success: false, message: "An internal error occured"
-        log "#{e.message} (#{e.class})", *e.backtrace
-      end
+      respond! success: false, message: message
 
     rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
       :disconnected
@@ -125,13 +122,13 @@ module Byebug::DAP
       raise InvalidRequestArgumentError.new(:missing_argument, scope: 'thread ID') unless thnum
 
       ctx = Byebug.contexts.find { |c| c.thnum == thnum }
-      raise InvalidRequestArgumentError.new(:missing_thread, value: thnum, scope: 'thread ID') unless ctx
+      raise InvalidRequestArgumentError.new(:missing_entry, value: thnum, scope: 'thread') unless ctx
 
       ctx
     end
 
     def find_frame(ctx, frnum)
-      raise InvalidRequestArgumentError.new(:missing_frame, value: frnum) unless frnum < ctx.stack_size
+      raise InvalidRequestArgumentError.new(:missing_entry, value: frnum, scope: 'frame') unless frnum < ctx.stack_size
 
       ::Byebug::Frame.new(ctx, frnum)
     end
