@@ -4,6 +4,11 @@ module Byebug::DAP
 
     register!
 
+    def execute
+      super
+      respond!
+    end
+
     def execute_in_context
       :stop
     end

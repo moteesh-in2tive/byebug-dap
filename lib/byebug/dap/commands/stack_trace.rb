@@ -21,20 +21,22 @@ module Byebug::DAP
 
       frames = (first...last).map do |i|
         frame = ::Byebug::Frame.new(ctx, i)
-        ::DAP::StackFrame.new(
+        {
           id: @session.save_frame(ctx.thnum, i),
           name: frame_name(frame),
-          source: ::DAP::Source.new(
+          source: {
             name: File.basename(frame.file),
-            path: File.expand_path(frame.file)),
+            path: File.expand_path(frame.file),
+          },
           line: frame.line,
-          column: 0) # TODO real column
-          .validate!
+          column: 1, # TODO real column
+        }
       end
 
-      respond! body: ::DAP::StackTraceResponseBody.new(
+      respond! body: {
         stackFrames: frames,
-        totalFrames: ctx.stack_size)
+        totalFrames: ctx.stack_size,
+      }
     end
 
     private

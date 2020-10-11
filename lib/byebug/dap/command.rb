@@ -17,22 +17,22 @@ module Byebug::DAP
       (@@commands ||= {})[command] = self
     end
 
-    def self.resolve!(command)
-      @@commands[command]
+    def self.resolve!(session, request)
+      cls = @@commands[request.command]
+      return cls if cls
+
+      session.respond! request, success: false, message: 'Invalid command'
     end
 
-    def self.execute(session, request, processor = nil)
-      command = resolve!(request.command)
-      Byebug::DAP.respond! session, request, success: false, message: 'Invalid command' unless command
+    def self.execute(session, request, *args)
+      return unless command = resolve!(session, request)
 
-      command.new(session, request, processor).safe_execute
+      command.new(session, request, *args).safe_execute
     end
 
-    def initialize(session, request, processor)
+    def initialize(session, request)
       @session = session
       @request = request
-      @processor = processor
-      @context = processor&.context
     end
 
     def log(*args)

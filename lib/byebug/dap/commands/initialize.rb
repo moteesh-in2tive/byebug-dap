@@ -14,6 +14,8 @@ module Byebug::DAP
         supportsFunctionBreakpoints: true,
         supportsBreakpointLocationsRequest: true,
         supportsDelayedStackTraceLoading: true,
+        exceptionBreakpointFilters: Command::SetExceptionBreakpoints::FILTERS,
+        supportsExceptionInfoRequest: true,
       }
 
       event! 'initialized'

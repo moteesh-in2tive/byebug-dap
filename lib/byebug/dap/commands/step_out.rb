@@ -5,6 +5,11 @@ module Byebug::DAP
 
     register!
 
+    def execute
+      super
+      respond!
+    end
+
     def execute_in_context
       @context.step_out(@context.frame.pos + 1, false)
       @context.frame = 0

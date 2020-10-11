@@ -12,7 +12,7 @@ module Byebug
         end
       end
 
-      attr_reader :context
+      attr_reader :context, :last_exception
       attr_writer :pause_requested
 
       def initialize(context, session)
@@ -62,6 +62,7 @@ module Byebug
           break if ContextualCommand.execute(@session, request, self) == :stop
         end
 
+        @last_exception = nil
         @session.invalidate_handles!
 
       rescue StandardError => e
@@ -74,15 +75,14 @@ module Byebug
           args = {
             reason: 'breakpoint',
             description: 'Hit breakpoint',
-            text: "Stopped by breakpoint at #{context.frame.file}:#{context.frame.line}",
+            text: "Hit breakpoint at #{context.location}",
           }
 
         when :catchpoint
-          # TODO this is probably not the right message
           args = {
-            reason: 'catchpoint',
+            reason: 'exception',
             description: 'Hit catchpoint',
-            text: "Stopped by catchpoint at #{context.location}: `#{@at_catchpoint}'",
+            text: "Hit catchpoint at #{context.location}",
           }
 
         when :step
@@ -90,12 +90,14 @@ module Byebug
             @pause_requested = false
             args = {
               reason: 'pause',
-              text: "Paused at #{context.frame.file}:#{context.frame.line}"
+              description: 'Paused',
+              text: "Paused at #{context.location}"
             }
           else
             args = {
               reason: 'step',
-              text: "Stepped at #{context.frame.file}:#{context.frame.line}"
+              description: 'Stepped',
+              text: "Stepped at #{context.location}"
             }
           end
 
@@ -131,7 +133,7 @@ module Byebug
       end
 
       def at_catchpoint(exception)
-        @at_catchpoint = exception
+        @last_exception = exception
       end
     end
   end

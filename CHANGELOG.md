@@ -2,10 +2,11 @@
 
 ## Upcoming
 
-- Support output capture
-- Support setting function breakpoints
-- Support breakpoint locations request
-- Support delayed stack trace loading
+- Support for output capture
+- Support for setting function breakpoints
+- Support for breakpoint locations request
+- Support for delayed stack trace loading
+- Basic support for exception breakpoints
 
 ## 0.1.2
 
@@ -14,7 +15,7 @@
 - Exit on disconnect when started by 'launch'
 - Expose `Byebug::DAP::Server#wait_for_client` instead of passing a block
 - Expose `Byebug::DAP#stop!` to allow the debugee to stop
-- Support specifying a start sequence with `--on-start CODE`
+- Support for specifying a start sequence with `--on-start CODE`
 - Support for child processes
 
 ## 0.1.1

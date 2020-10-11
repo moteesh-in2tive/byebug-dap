@@ -5,6 +5,11 @@ module Byebug::DAP
 
     register!
 
+    def execute
+      super
+      respond!
+    end
+
     def execute_in_context
       @processor.pause_requested = true
     end
