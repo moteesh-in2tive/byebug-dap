@@ -25,6 +25,7 @@ module Byebug::DAP
 
         bp = find_or_add_breakpoint(verified, existing, m[:class], m[:method])
         bp.expr = convert_breakpoint_condition(rq.condition)
+        bp.hit_condition, bp.hit_value = convert_breakpoint_hit_condition(rq.hitCondition)
       end
 
       verified.each do |bp|

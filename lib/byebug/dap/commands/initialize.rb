@@ -13,6 +13,7 @@ module Byebug::DAP
         supportsConfigurationDoneRequest: true,
         supportsFunctionBreakpoints: true,
         supportsConditionalBreakpoints: true,
+        supportsHitConditionalBreakpoints: true,
         supportsBreakpointLocationsRequest: true,
         supportsDelayedStackTraceLoading: true,
         exceptionBreakpointFilters: Command::SetExceptionBreakpoints::FILTERS,

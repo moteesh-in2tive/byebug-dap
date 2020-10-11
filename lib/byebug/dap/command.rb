@@ -46,6 +46,9 @@ module Byebug::DAP
 
     rescue InvalidRequestArgumentError => e
       case e.error
+      when String
+        respond! success: false, message: e.error
+
       when :missing_argument
         respond! success: false, message: "Missing #{e.scope}"
 
@@ -204,6 +207,32 @@ module Byebug::DAP
       return nil if condition.nil? || condition.empty?
       return nil unless condition.is_a?(String)
       return condition
+    end
+
+    def convert_breakpoint_hit_condition(condition)
+      return nil if condition.nil? || condition.empty?
+      return nil unless condition.is_a?(String)
+
+      m = /^(?<op><|<=|=|==|===|=>|>|%)?\s*(?<value>[0-9]+)$/.match(condition)
+      raise InvalidRequestArgumentError.new("'#{condition}' is not a valid hit condition") unless m
+
+      v = m[:value].to_i
+      case m[:op]
+      when nil, '=', '==', '==='
+        return :eq, v
+
+      when '>'
+        return :ge, v - 1
+
+      when '>='
+        return :ge, v
+
+      when '%'
+        return :mod, v
+
+      else
+        raise InvalidRequestArgumentError.new("Byebug does not support hit conditions using '#{m[:op]}'") unless m
+      end
     end
 
     def find_or_add_breakpoint(verified, existing, source, pos)
