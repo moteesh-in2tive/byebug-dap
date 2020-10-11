@@ -12,6 +12,7 @@ module Byebug::DAP
       respond! body: {
         supportsConfigurationDoneRequest: true,
         supportsFunctionBreakpoints: true,
+        supportsConditionalBreakpoints: true,
         supportsBreakpointLocationsRequest: true,
         supportsDelayedStackTraceLoading: true,
         exceptionBreakpointFilters: Command::SetExceptionBreakpoints::FILTERS,

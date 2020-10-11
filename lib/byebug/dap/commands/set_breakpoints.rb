@@ -8,25 +8,39 @@ module Byebug::DAP
 
     def execute
       return unless path = can_read_file!(args.source.path)
+      if args.lines.empty? && args.breakpoints.empty?
+        Byebug.breakpoints.reject! { |bp| bp.source == path }
+        respond! body: { breakpoints: [] }
+        return
+      end
+
+      existing = Byebug.breakpoints.filter { |bp| bp.source == path }
+      verified = []
       lines = potential_breakpoint_lines(path) { |e|
         respond! success: false, message: "Failed to resolve breakpoints for #{path}"
         return
       }
 
-      ::Byebug.breakpoints.each { |bp| ::Byebug::Breakpoint.remove(bp.id) if bp.source == path }
-
-      verified = []
-      args.breakpoints.each do |requested|
-        next unless lines.include? requested.line
-
-        bp = ::Byebug::Breakpoint.add(path, requested.line)
-        verified << ::DAP::Breakpoint.new(
-          id: bp.id,
-          verified: true,
-          line: requested.line)
+      (args.lines & lines).each do |l|
+        find_or_add_breakpoint(verified, existing, path, l)
       end
 
-      respond! body: { breakpoints: verified }
+      args.breakpoints.filter { |rq| lines.include?(rq.line) }.each do |rq|
+        bp = find_or_add_breakpoint(verified, existing, path, rq.line)
+        bp.expr = convert_breakpoint_condition(rq.condition)
+      end
+
+      existing.each { |bp| Byebug.breakpoints.delete(bp) }
+
+      respond! body: {
+        breakpoints: verified.map { |bp|
+          {
+            id: bp.id,
+            line: bp.pos,
+            verified: true,
+          }
+        }
+      }
     end
   end
 end

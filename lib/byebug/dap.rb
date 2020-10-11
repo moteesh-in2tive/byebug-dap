@@ -37,6 +37,8 @@ module Byebug
 end
 
 module Byebug::DAP
+  Protocol = ::DAP
+
   class << self
     def child_spawned(*args)
       Session.child_spawned(*args)

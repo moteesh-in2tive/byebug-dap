@@ -9,44 +9,54 @@ module Byebug::DAP
     def execute
       ::Byebug.breakpoints.each { |bp| ::Byebug::Breakpoint.remove(bp.id) if bp.pos.is_a?(String) }
 
+      existing = Byebug.breakpoints.filter { |bp| bp.pos.is_a?(String) }
+      verified = []
       results = []
-      args.breakpoints.each do |requested|
-        m = /^(?<class>[:\w]+)(?<sep>\.|#)(?<method>\w+)$/.match(requested.name)
+
+      args.breakpoints.each do |rq|
+        m = /^(?<class>[:\w]+)(?<sep>\.|#)(?<method>\w+)$/.match(rq.name)
         unless m
-          results << ::DAP::Breakpoint.new(
+          results << {
             verified: false,
-            message: "'#{requested.name}' is not a valid method identifier")
+            message: "'#{rq.name}' is not a valid method identifier",
+          }
+          next
         end
 
-        bp = Byebug::Breakpoint.add(m[:class], m[:method].to_sym)
-        next unless bp
+        bp = find_or_add_breakpoint(verified, existing, m[:class], m[:method])
+        bp.expr = convert_breakpoint_condition(rq.condition)
+      end
 
-        cm, im = resolve_method(m[:class], m[:method])
+      verified.each do |bp|
+        cm, im = resolve_method(bp.source, bp.pos)
 
         if cm.nil? && im.nil?
-          results << ::DAP::Breakpoint.new(
+          results << {
             id: bp.id,
-            verified: true)
+            verified: true
+          }
         end
 
         unless cm.nil?
-          results << ::DAP::Breakpoint.new(
+          results << {
             id: bp.id,
             verified: true,
             source: ::DAP::Source.new(name: File.basename(cm[0]), path: cm[0]),
-            line: cm[1])
+            line: cm[1]
+          }
         end
 
         unless im.nil?
-          results << ::DAP::Breakpoint.new(
+          results << {
             id: bp.id,
             verified: true,
             source: ::DAP::Source.new(name: File.basename(im[0]), path: im[0]),
-            line: im[1])
+            line: im[1]
+          }
         end
       end
 
-      respond! body: ::DAP::SetFunctionBreakpointsResponseBody.new(breakpoints: results)
+      respond! body: { breakpoints: results }
     end
 
     private

@@ -7,6 +7,7 @@
 - Support for breakpoint locations request
 - Support for delayed stack trace loading
 - Basic support for exception breakpoints
+- Support for conditional breakpoints
 
 ## 0.1.2
 

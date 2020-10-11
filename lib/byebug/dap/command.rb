@@ -199,5 +199,26 @@ module Byebug::DAP
     rescue ScriptError, StandardError => e
       yield(e)
     end
+
+    def convert_breakpoint_condition(condition)
+      return nil if condition.nil? || condition.empty?
+      return nil unless condition.is_a?(String)
+      return condition
+    end
+
+    def find_or_add_breakpoint(verified, existing, source, pos)
+      if bp = verified.find { |bp| bp.source == source && bp.pos == pos }
+        return bp
+      end
+
+      if bp = existing.find { |bp| bp.source == source && bp.pos == pos }
+        existing.delete(bp)
+      else
+        bp = Byebug::Breakpoint.add(source, pos.is_a?(String) ? pos.to_sym : pos)
+      end
+
+      verified << bp
+      bp
+    end
   end
 end
