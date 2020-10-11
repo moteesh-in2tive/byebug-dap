@@ -9,6 +9,7 @@
 - Basic support for exception breakpoints
 - Support for conditional breakpoints
 - Support for hit conditional breakpoints
+- Support for logpoints
 
 ## 0.1.2
 

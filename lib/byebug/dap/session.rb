@@ -23,6 +23,9 @@ module Byebug
         @ios = ios
         @on_configured = block
         @pid = Process.pid
+        @log_points = {}
+        @frame_ids = Handles.new
+        @variable_refs = Handles.new
         @trace = TracePoint.new(:thread_begin, :thread_end) { |t| process_trace t }
 
         notify_of_children
@@ -50,8 +53,8 @@ module Byebug
       end
 
       def invalidate_handles!
-        frame_ids.clear!
-        variable_refs.clear!
+        @frame_ids.clear!
+        @variable_refs.clear!
       end
 
       def start!(mode)
@@ -99,19 +102,38 @@ module Byebug
       end
 
       def save_variables(*args)
-        variable_refs << args
+        @variable_refs << args
       end
 
       def restore_variables(ref)
-        variable_refs[ref]
+        @variable_refs[ref]
       end
 
       def save_frame(*args)
-        frame_ids << args
+        @frame_ids << args
       end
 
       def restore_frame(id)
-        frame_ids[id]
+        @frame_ids[id]
+      end
+
+      def get_log_point(breakpoint)
+        @log_points[breakpoint.id]
+      end
+
+      def set_log_point(breakpoint, expr)
+        if expr.nil? || expr.empty?
+          @log_points.delete(breakpoint.id)
+        else
+          @log_points[breakpoint.id] = expr
+        end
+      end
+
+      def clear_breakpoints(*breakpoints)
+        breakpoints.each do |breakpoint|
+          Byebug.breakpoints.delete(breakpoint)
+          @log_points.delete(breakpoint.id)
+        end
       end
 
       private
@@ -132,14 +154,6 @@ module Byebug
         m = ::DAP::Encoding.decode(@connection)
         log "#{Process.pid} < #{m.to_wire}" if Debug.protocol
         m
-      end
-
-      def frame_ids
-        @frame_ids ||= Handles.new
-      end
-
-      def variable_refs
-        @variable_refs ||= Handles.new
       end
 
       def process_trace(trace)

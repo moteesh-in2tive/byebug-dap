@@ -69,7 +69,38 @@ module Byebug
         log "\n! #{e.message} (#{e.class})", *e.backtrace
       end
 
+      def logpoint!
+        return false unless @last_breakpoint
+
+        breakpoint, @last_breakpoint = @last_breakpoint, nil
+        expr = @session.get_log_point(breakpoint)
+        return false unless expr
+
+        binding = @context.frame._binding
+        msg = expr.gsub(/\{([^\}]+)\}/) do |x|
+          safe(binding, :eval, x[1...-1]) { return true } # ignore bad log points
+        end
+
+        body = {
+          category: 'console',
+          output: msg + "\n",
+        }
+
+        if breakpoint.pos.is_a?(Integer)
+          body[:line] = breakpoint.pos
+          body[:source] = {
+            name: File.basename(breakpoint.source),
+            path: breakpoint.source,
+          }
+        end
+
+        @session.event! 'output', **body
+        return true
+      end
+
       def stopped!
+        return if logpoint!
+
         case context.stop_reason
         when :breakpoint
           args = {
@@ -129,7 +160,7 @@ module Byebug
       # end
 
       def at_breakpoint(breakpoint)
-        @at_breakpoint = breakpoint
+        @last_breakpoint = breakpoint
       end
 
       def at_catchpoint(exception)

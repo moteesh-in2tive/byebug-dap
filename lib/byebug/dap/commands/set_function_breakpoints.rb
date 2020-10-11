@@ -57,6 +57,8 @@ module Byebug::DAP
         end
       end
 
+      @session.clear_breakpoints(*existing)
+
       respond! body: { breakpoints: results }
     end
 
