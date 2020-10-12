@@ -20,6 +20,11 @@ options = {}
 OptionParser.new do |opts|
   opts.banner = USAGE
 
+  opts.on("--version", "Print version information") do |v|
+    puts "#{Byebug::DAP::NAME} #{Byebug::DAP::VERSION}"
+    exit
+  end
+
   opts.on("--stdio", "Listen on STDIN and STDOUT") { |v| options[:stdio] = v }
   opts.on("--listen PORT", "Listen on a TCP port") { |v| options[:listen] = v }
   opts.on("--unix SOCKET", "Listen on a unix socket") { |v| options[:unix] = v }

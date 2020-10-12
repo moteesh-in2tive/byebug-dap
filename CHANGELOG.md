@@ -1,6 +1,6 @@
 # Change Log
 
-## Upcoming
+## 0.1.3
 
 - Support for output capture
 - Support for setting function breakpoints

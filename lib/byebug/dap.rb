@@ -3,7 +3,7 @@ require 'byebug'
 require 'byebug/core'
 require 'byebug/remote'
 
-Byebug::DAP = Module.new
+require_relative 'gem'
 
 # load helpers
 Dir[File.join(__dir__, 'dap', 'helpers', '*.rb')].each { |file| require file }
