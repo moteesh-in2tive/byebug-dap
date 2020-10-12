@@ -1,3 +1,5 @@
+[![Gem Version](https://badge.fury.io/rb/byebug-dap.svg)](https://badge.fury.io/rb/byebug-dap) [![Documentation](https://img.shields.io/static/v1?label=docs&message=master&color=informational&style=flat)](https://firelizzard.gitlab.io/byebug-dap/)
+
 # Byebug Debug Adapter Protocol
 
 This gem adds [Debug Adapter
