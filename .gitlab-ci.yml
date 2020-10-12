@@ -1,0 +1,9 @@
+image: ruby
+
+pages:
+  script:
+  - gem install yard
+  - yard -o public
+  artifacts:
+    paths:
+      - public
