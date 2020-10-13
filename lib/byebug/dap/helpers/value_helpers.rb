@@ -37,8 +37,6 @@ module Byebug::DAP
         end
       end
 
-      value = value[0...100] + '...' if value.size > 100
-
       case kind
       when :variable
         klazz = ::DAP::Variable
