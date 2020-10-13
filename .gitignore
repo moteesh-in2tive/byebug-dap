@@ -1,3 +1,6 @@
 /*.gem
 /.yardoc
 /doc
+/.vscode
+/Gemfile
+/Gemfile.lock
