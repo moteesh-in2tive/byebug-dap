@@ -8,8 +8,8 @@ module Byebug::DAP
       scalar = safe(-> { Scalar === val }, :call) { true }
       return str, typ, [], [] if scalar
 
-      named = safe(val, :instance_variables) { [] }
-      named += safe(val, :class_variables) { [] }
+      named = safe(val, :instance_variables) { [] } || []
+      named += safe(val, :class_variables) { [] } || []
       # named += safe(val, :constants) { [] }
 
       indexed = safe(-> {

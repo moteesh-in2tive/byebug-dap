@@ -28,7 +28,7 @@ module Byebug::DAP
       args.breakpoints.filter { |rq| lines.include?(rq.line) }.each do |rq|
         bp = find_or_add_breakpoint(verified, existing, path, rq.line)
         bp.expr = convert_breakpoint_condition(rq.condition)
-        bp.hit_condition, bp.hit_value = convert_breakpoint_hit_condition(rq.hitCondition)
+        bp.hit_condition, bp.hit_value = convert_breakpoint_hit_condition(rq.hitCondition) if rq.hitCondition
         @session.set_log_point(bp, rq.logMessage)
       end
 
