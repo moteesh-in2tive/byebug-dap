@@ -1,6 +1,10 @@
 module Byebug
   module DAP
+    # Byebug DAP Server
     class Server
+      # Create a new server.
+      # @param capture [Boolean] if `true`, the debugee's STDOUT and STDERR will be captured
+      # @param forward [Boolean] if `false`, the debugee's STDOUT and STDERR will be supressed
       def initialize(capture: true, forward: true)
         @started = false
         @mu = Mutex.new
@@ -10,6 +14,12 @@ module Byebug
         @forward = forward
       end
 
+      # Starts the server. Calls {#start_stdio} if `host == :stdio`. Calls
+      # {#start_unix} with `port` if `host == :unix`. Calls {#start_tcp} with
+      # `host` and `port` otherwise.
+      # @param host `:stdio`, `:unix`, or the TCP host name
+      # @param port the Unix socket path or TCP port
+      # @return [Server]
       def start(host, port = 0)
         case host
         when :stdio
@@ -21,6 +31,10 @@ module Byebug
         end
       end
 
+      # Starts the server, listening on a TCP socket.
+      # @param host [String] the IP to listen on
+      # @param port [Number] the port to listen on
+      # @return [Server]
       def start_tcp(host, port)
         return if @started
         @started = true
@@ -29,6 +43,9 @@ module Byebug
         launch_accept TCPServer.new(host, port)
       end
 
+      # Starts the server, listening on a Unix socket.
+      # @param socket [String] the Unix socket path
+      # @return [Server]
       def start_unix(socket)
         return if @started
         @started = true
@@ -37,6 +54,8 @@ module Byebug
         launch_accept UNIXServer.new(socket)
       end
 
+      # Starts the server using STDIN and STDOUT to communicate.
+      # @return [Server]
       def start_stdio
         return if @started
         @started = true
@@ -47,6 +66,7 @@ module Byebug
         launch stream
       end
 
+      # Blocks until a client connects and begins debugging.
       def wait_for_client
         @mu.synchronize do
           loop do

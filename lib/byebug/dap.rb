@@ -22,8 +22,13 @@ require_relative 'dap/server'
 
 module Byebug
   class << self
-    def start_dap(host, port = 0, &block)
-      DAP::Server.new(&block).start(host, port)
+    # Creates and starts the server. See {DAP::Server#initialize} and
+    # {DAP::Server#start}.
+    # @param host the host passed to {DAP::Server#start}
+    # @param port the port passed to {DAP::Server#start}
+    # @return [DAP::Server]
+    def start_dap(host, port = 0)
+      DAP::Server.new.start(host, port)
     end
   end
 
@@ -37,28 +42,34 @@ module Byebug
 end
 
 module Byebug::DAP
+  # An alias for `ruby-dap`'s {DAP} module.
   Protocol = ::DAP
 
   class << self
-    def child_spawned(*args)
-      Session.child_spawned(*args)
+    # (see Session.stop!)
+    def stop!
+      Session.stop!
     end
 
-    def stop!
-      interface = Byebug::Context.interface
-      return false unless interface.is_a?(Session)
-
-      interface.stop!
-      true
+    # (see Session.child_spawned)
+    def child_spawned(*args)
+      Session.child_spawned(*args)
     end
   end
 end
 
+# Debug logging
 module Byebug::DAP::Debug
   class << self
     @protocol = false
     @evaluate = false
 
-    attr_accessor :protocol, :evaluate
+    # Log all sent and received protocol messages.
+    # @return [Boolean]
+    attr_accessor :protocol
+
+    # Log evaluation failures.
+    # @return [Boolean]
+    attr_accessor :evaluate
   end
 end

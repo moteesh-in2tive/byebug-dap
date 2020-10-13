@@ -1,10 +1,14 @@
 module Byebug
   module DAP
+    # Processes thread-specific commands and handles Byebug/TracePoint events.
     class CommandProcessor
       extend Forwardable
       include SafeHelpers
 
+      # Indicates a timeout while sending a message to the context.
       class TimeoutError < StandardError
+        # The receiving context.
+        # @return [Byebug::Context]
         attr_reader :context
 
         def initialize(context)
@@ -12,9 +16,25 @@ module Byebug
         end
       end
 
-      attr_reader :context, :last_exception
+      # The thread context.
+      # @return [Byebug::Context]
+      attr_reader :context
+
+      # The last exception that occured.
+      # @return [Exception]
+      attr_reader :last_exception
+
+      # Indicates that the client requested a pause.
+      # @return [Boolean]
+      # @note This should only be set by {Command::Pause}
+      # @api private
       attr_writer :pause_requested
 
+      # Create a new command processor.
+      # @param context [Byebug::Context] the thread context
+      # @param session [Session] the debugging session
+      # @note This should only be called by Byebug internals
+      # @api private
       def initialize(context, session)
         @context = context
         @session = session
@@ -23,14 +43,21 @@ module Byebug
         @exec_ch = Channel.new
       end
 
+      # (see Session#log)
       def log(*args)
         @session.log(*args)
       end
 
+      # Send a message to the thread context.
+      # @param message the message to send
+      # @note Raises a {TimeoutError} after 1 second if the thread is not paused or not responding.
       def <<(message)
         @requests.push(message, timeout: 1) { raise TimeoutError.new(context) }
       end
 
+      # Execute a code block in the thread.
+      # @yield the code block to execute
+      # @note This calls {#<<} and thus may raise a {TimeoutError}.
       def execute(&block)
         raise "Block required" unless block_given?
 
@@ -46,6 +73,8 @@ module Byebug
           r
         end
       end
+
+      private
 
       def process_requests
         loop do
@@ -69,33 +98,28 @@ module Byebug
         log "\n! #{e.message} (#{e.class})", *e.backtrace
       end
 
-      def logpoint!
-        return false unless @last_breakpoint
+      alias_method :at_line, :stopped!
+      alias_method :at_end, :stopped!
 
-        breakpoint, @last_breakpoint = @last_breakpoint, nil
-        expr = @session.get_log_point(breakpoint)
-        return false unless expr
+      def at_end
+        stopped!
+      end
 
-        binding = @context.frame._binding
-        msg = expr.gsub(/\{([^\}]+)\}/) do |x|
-          safe(binding, :eval, x[1...-1]) { return true } # ignore bad log points
-        end
+      def at_return(return_value)
+        @at_return = return_value
+        stopped!
+      end
 
-        body = {
-          category: 'console',
-          output: msg + "\n",
-        }
+      def at_tracing
+        # @session.puts "Tracing: #{context.full_location}"
+      end
 
-        if breakpoint.pos.is_a?(Integer)
-          body[:line] = breakpoint.pos
-          body[:source] = {
-            name: File.basename(breakpoint.source),
-            path: breakpoint.source,
-          }
-        end
+      def at_breakpoint(breakpoint)
+        @last_breakpoint = breakpoint
+      end
 
-        @session.event! 'output', **body
-        return true
+      def at_catchpoint(exception)
+        @last_exception = exception
       end
 
       def stopped!
@@ -141,30 +165,33 @@ module Byebug
         process_requests
       end
 
-      alias at_line stopped!
-      alias at_end stopped!
+      def logpoint!
+        return false unless @last_breakpoint
 
-      def at_end
-        stopped!
-      end
+        breakpoint, @last_breakpoint = @last_breakpoint, nil
+        expr = @session.get_log_point(breakpoint)
+        return false unless expr
 
-      def at_return(return_value)
-        @at_return = return_value
-        stopped!
-      end
+        binding = @context.frame._binding
+        msg = expr.gsub(/\{([^\}]+)\}/) do |x|
+          safe(binding, :eval, x[1...-1]) { return true } # ignore bad log points
+        end
 
-      # def at_tracing
-      #   @session.puts "Tracing: #{context.full_location}"
+        body = {
+          category: 'console',
+          output: msg + "\n",
+        }
 
-      #   # run_auto_cmds(2)
-      # end
+        if breakpoint.pos.is_a?(Integer)
+          body[:line] = breakpoint.pos
+          body[:source] = {
+            name: File.basename(breakpoint.source),
+            path: breakpoint.source,
+          }
+        end
 
-      def at_breakpoint(breakpoint)
-        @last_breakpoint = breakpoint
-      end
-
-      def at_catchpoint(exception)
-        @last_exception = exception
+        @session.event! 'output', **body
+        return true
       end
     end
   end

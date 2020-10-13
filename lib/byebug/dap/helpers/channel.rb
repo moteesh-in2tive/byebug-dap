@@ -1,5 +1,7 @@
 module Byebug
   module DAP
+    # A channel for synchronously passing values between threads.
+    # @api private
     class Channel
       def initialize
         @mu = Mutex.new
@@ -8,6 +10,7 @@ module Byebug
         @have = false
       end
 
+      # Close the channel.
       def close
         @mu.synchronize {
           @closed = true
@@ -15,6 +18,8 @@ module Byebug
         }
       end
 
+      # Pop an item off the channel. Blocks until {#push} or {#close} is called.
+      # @return a value that was pushed or `nil` if the channel is closed.
       def pop
         synchronize_loop {
           return if @closed
@@ -29,6 +34,10 @@ module Byebug
         }
       end
 
+      # Push an item onto the channel. Raises an error if the channel is closed.
+      # If `timeout` is nil, blocks until {#push} or {#close} is called.
+      # @param message the value to push
+      # @yield called on timeout
       def push(message, timeout: nil)
         deadline = timeout + Time.now.to_f unless timeout.nil?
 

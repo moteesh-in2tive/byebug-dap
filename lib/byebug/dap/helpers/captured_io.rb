@@ -1,5 +1,11 @@
 module Byebug::DAP
+  # Captures STDOUT and STDERR. See {CapturedOutput}.
+  # @api private
   class CapturedIO
+    # Capture STDOUT and STDERR and create a new {Byebug::DebugThread} running
+    # {#capture}. See {CapturedOutput#initialize}.
+    # @param forward_stdout [Boolean] if true, captured STDOUT is forwarded to the original STDOUT.
+    # @param forward_stderr [Boolean] if true, captured STDERR is forwarded to the original STDERR.
     def initialize(forward_stdout, forward_stderr)
       @forward_stdout = forward_stdout
       @forward_stderr = forward_stderr
@@ -10,6 +16,8 @@ module Byebug::DAP
       Byebug::DebugThread.new { capture }
     end
 
+    # Return an IO that can be used for logging.
+    # @return [IO]
     def log
       if defined?(LOG)
         LOG
@@ -20,6 +28,7 @@ module Byebug::DAP
       end
     end
 
+    # Restore the original STDOUT and STDERR. See {CapturedOutput#restore}.
     def restore
       @stop = true
       @stdout.restore
@@ -28,6 +37,11 @@ module Byebug::DAP
 
     private
 
+    # In a loop, read from the captured STDOUT and STDERR and send an output
+    # event to the active session's client (if there is an active session), and
+    # optionally forward the output to the original STDOUT/STDERR.
+    # @api private
+    # @!visibility public
     def capture
       until @stop do
         r, = IO.select([@stdout.captured, @stderr.captured])

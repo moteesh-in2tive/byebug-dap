@@ -1,9 +1,14 @@
 module Byebug::DAP
+  # Implementation of a DAP command.
+  # @abstract Subclasses must implement {#execute}
   class Command
+    # The error message returned when a variable or expression cannot be evaluated.
     EVAL_ERROR = "*Error in evaluation*"
 
     include SafeHelpers
 
+    # The DAP command assocated with the receiver.
+    # @return [String]
     def self.command
       return @command_name if defined?(@command_name)
 
@@ -15,10 +20,16 @@ module Byebug::DAP
       @command_name = "#{last[0].downcase}#{last[1..]}"
     end
 
+    # Register the receiver as a DAP command.
     def self.register!
       (@@commands ||= {})[command] = self
     end
 
+    # Resolve the requested command. Calls {Session#respond!} indicating a
+    # failed request if the command cannot be found.
+    # @param session [Session] the debug session
+    # @param request [Protocol::Request] the DAP request
+    # @return [Class] the {Command} class
     def self.resolve!(session, request)
       cls = @@commands[request.command]
       return cls if cls
@@ -26,21 +37,33 @@ module Byebug::DAP
       session.respond! request, success: false, message: 'Invalid command'
     end
 
+    # Resolve and execute the requested command. The command is resolved with
+    # {.resolve!}, {#initialize}d, and {#safe_execute}d.
+    # @param session [Session] the debug session
+    # @param request [Protocol::Request] the DAP request
+    # @param args [Array] additional arguments for {#initialize}
+    # @return the return value of {#safe_execute}
     def self.execute(session, request, *args)
       return unless command = resolve!(session, request)
 
       command.new(session, request, *args).safe_execute
     end
 
+    # Create a new instance of the receiver.
+    # @param session [Session] the debug session
+    # @param request [Protocol::Request] the DAP request
     def initialize(session, request)
       @session = session
       @request = request
     end
 
+    # (see Session#log)
     def log(*args)
       @session.log(*args)
     end
 
+    # Call {#execute} safely, handling any errors that arise.
+    # @return the return value of {#execute}
     def safe_execute
       execute
 
@@ -91,12 +114,18 @@ module Byebug::DAP
       return
     end
 
+    # Raises an error if the debugger is running
+    # @api private
+    # @!visibility public
     def stopped!
       return if !Byebug.started?
 
       respond! success: false, message: "Cannot #{@request.command} - debugger is already running"
     end
 
+    # Raises an error unless the debugger is running
+    # @api private
+    # @!visibility public
     def started!
       return if Byebug.started?
 
@@ -111,6 +140,13 @@ module Byebug::DAP
       safe(-> { "#{ex.message} (#{ex.class.name})" }, :call) { EVAL_ERROR }
     end
 
+    # Execute a code block on the specified thread. See {SafeHelpers#safe}.
+    # @param thnum [Integer] the thread number
+    # @param block [Proc] the code block
+    # @yield called on error
+    # @yieldparam ex [Exception] the execution error
+    # @api private
+    # @!visibility public
     def execute_on_thread(thnum, block, &on_error)
       return safe(block, :call, &on_error) if thnum == 0 || @context&.thnum == thnum
 

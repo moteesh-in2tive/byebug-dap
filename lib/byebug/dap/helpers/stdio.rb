@@ -1,4 +1,6 @@
 module Byebug::DAP
+  # A debug session 'connection' using STDIN and STDOUT.
+  # @api private
   class STDIO
     extend Forwardable
 

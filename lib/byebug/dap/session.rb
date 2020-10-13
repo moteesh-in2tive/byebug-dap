@@ -1,24 +1,41 @@
 module Byebug
   module DAP
+    # A Byebug DAP session
     class Session
       include SafeHelpers
 
-      @@children = []
+      # Call {Session#stop!} on {Byebug::Context.interface} if it is a {Session}.
+      # @return [Boolean] whether {Byebug::Context.interface} was a {Session}
+      def self.stop!
+        session = Byebug::Context.interface
+        return false unless session.is_a?(Session)
 
+        session.stop!
+        true
+      end
+
+      # Add a {ChildSpawnedEventBody} entry and send a `childSpawned` event to
+      # the current session's client, if {Byebug::Context.interface} is a
+      # {Session}.
       def self.child_spawned(name, pid, socket)
         child = ChildSpawnedEventBody.new(name: name, pid: pid, socket: socket)
-        @@children << child
+        (@@children ||= []) << child
 
         session = Context.interface
-        session.event! child if session.is_a?(Byebug::DAP::Session)
+        return false unless session.is_a?(Session)
 
+        session.event! child
         return true
 
       rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
         return false
       end
 
-      def initialize(connection, ios, &block)
+      # Create a new session instance.
+      # @param connection [IO] the connection to the client
+      # @param ios [CapturedIO] the captured IO
+      # @yield called once the client is done configuring the session (optional)
+      def initialize(connection, ios = nil, &block)
         @connection = connection
         @ios = ios
         @on_configured = block
@@ -31,6 +48,7 @@ module Byebug
         notify_of_children
       end
 
+      # Write a message to the log.
       def log(*args)
         logger =
           if @ios
@@ -43,6 +61,7 @@ module Byebug
         logger.puts(*args)
       end
 
+      # Execute requests from the client until the connection is closed.
       def execute
         Context.interface = self
         Context.processor = Byebug::DAP::CommandProcessor
@@ -52,11 +71,18 @@ module Byebug
         Context.interface = LocalInterface.new
       end
 
+      # Invalidate frame IDs and variables references.
+      # @note This should only be used by a {ContextualCommand} that un-pauses its context
+      # @api private
       def invalidate_handles!
         @frame_ids.clear!
         @variable_refs.clear!
       end
 
+      # Start Byebug.
+      # @param mode [Symbol] `:attached` or `:launched`
+      # @note This should only be used by {Command::Attach} or {Command::Launch}
+      # @api private
       def start!(mode)
         @trace.enable
         Byebug.mode = mode
@@ -64,6 +90,9 @@ module Byebug
         @exit_on_stop = true if mode == :launched
       end
 
+      # Call the block passed to {#initialize}.
+      # @note This should only be used by {Command::ConfigurationDone}
+      # @api private
       def configured!
         return unless @on_configured
 
@@ -71,6 +100,8 @@ module Byebug
         callback.call
       end
 
+      # Stop Byebug and close the client's connection.
+      # @note If the session was started with the `launch` command, this will call {Kernel#exit}
       def stop!
         exit if @exit_on_stop && @pid == Process.pid
 
@@ -80,6 +111,10 @@ module Byebug
         @connection.close
       end
 
+      # Send an event to the client. Either call with an event name and body
+      # attributes, or call with an already constructed body.
+      # @param event [String|Protocol::Base] the event name or event body
+      # @param values [Hash] event body attributes
       def event!(event, **values)
         if (cls = event.class.name.split('::').last) && cls.end_with?('EventBody')
           body, event = event, cls[0].downcase + cls[1...-9]
@@ -91,6 +126,12 @@ module Byebug
         send ::DAP::Event.new(event: event, body: body)
       end
 
+      # Send a response to the client.
+      # @param request [Protocol::Request] the request to respond to
+      # @param body [Hash|Protocol::Base] the response body
+      # @param success [Boolean] whether the request was successful
+      # @param message [String] the response message
+      # @param values [Hash] additional response attributes
       def respond!(request, body = nil, success: true, message: 'Success', **values)
         send ::DAP::Response.new(
           request_seq: request.seq,
@@ -101,26 +142,40 @@ module Byebug
           **values)
       end
 
+      # Create a variables reference.
       def save_variables(*args)
         @variable_refs << args
       end
 
+      # Retrieve variables from a reference.
       def restore_variables(ref)
         @variable_refs[ref]
       end
 
+      # Create a frame ID.
       def save_frame(*args)
         @frame_ids << args
       end
 
+      # Restore a frame from an ID.
       def restore_frame(id)
         @frame_ids[id]
       end
 
+      # Get the log point expression associated with `breakpoint`.
+      # @param breakpoint [Byebug::Breakpoint] the breakpoint
+      # @return [String] the log point expression
+      # @note This should only be used by {CommandProcessor}
+      # @api private
       def get_log_point(breakpoint)
         @log_points[breakpoint.id]
       end
 
+      # Associate a log point expression with `breakpoint`.
+      # @param breakpoint [Byebug::Breakpoint] the breakpoint
+      # @param expr [String] the log point expression
+      # @note This should only be used by {CommandProcessor}
+      # @api private
       def set_log_point(breakpoint, expr)
         if expr.nil? || expr.empty?
           @log_points.delete(breakpoint.id)
@@ -129,6 +184,9 @@ module Byebug
         end
       end
 
+      # Delete the specified breakpoints and any log points associated with
+      # them.
+      # @param breakpoints [Array<Byebug::Breakpoint>] the breakpoints
       def clear_breakpoints(*breakpoints)
         breakpoints.each do |breakpoint|
           Byebug.breakpoints.delete(breakpoint)
@@ -139,7 +197,7 @@ module Byebug
       private
 
       def notify_of_children
-        @@children.each { |c| event! c }
+        @@children.each { |c| event! c } if defined?(@@children)
       rescue IOError, Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED
         # client is closed
       end

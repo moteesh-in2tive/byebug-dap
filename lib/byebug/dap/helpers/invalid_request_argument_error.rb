@@ -1,7 +1,17 @@
 module Byebug
   module DAP
+    # Raised when the client sends a request with invalid arguments
+    # @api private
     class InvalidRequestArgumentError < StandardError
-      attr_accessor :error, :value, :scope
+      # The error kind or message.
+      # @return [Symbol|String]
+      attr_reader :error
+
+      # The error value.
+      attr_reader :value
+
+      # The error scope.
+      attr_reader :scope
 
       def initialize(error, value: nil, scope: nil)
         @error = error
