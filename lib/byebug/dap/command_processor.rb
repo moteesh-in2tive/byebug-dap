@@ -8,7 +8,7 @@ module Byebug
       # Indicates a timeout while sending a message to the context.
       class TimeoutError < StandardError
         # The receiving context.
-        # @return [Byebug::Context]
+        # @return [gem:byebug:Byebug::Context]
         attr_reader :context
 
         def initialize(context)
@@ -17,11 +17,11 @@ module Byebug
       end
 
       # The thread context.
-      # @return [Byebug::Context]
+      # @return [gem:byebug:Byebug::Context]
       attr_reader :context
 
       # The last exception that occured.
-      # @return [Exception]
+      # @return [std:Exception]
       attr_reader :last_exception
 
       # Indicates that the client requested a pause.
@@ -31,9 +31,9 @@ module Byebug
       attr_writer :pause_requested
 
       # Create a new command processor.
-      # @param context [Byebug::Context] the thread context
+      # @param context [gem:byebug:Byebug::Context] the thread context
       # @param session [Session] the debugging session
-      # @note This should only be called by Byebug internals
+      # @note This should only be used by Byebug internals
       # @api private
       def initialize(context, session)
         @context = context
@@ -50,14 +50,14 @@ module Byebug
 
       # Send a message to the thread context.
       # @param message the message to send
-      # @note Raises a {TimeoutError} after 1 second if the thread is not paused or not responding.
+      # @note Raises a {TimeoutError timeout error} after 1 second if the thread is not paused or not responding.
       def <<(message)
         @requests.push(message, timeout: 1) { raise TimeoutError.new(context) }
       end
 
       # Execute a code block in the thread.
       # @yield the code block to execute
-      # @note This calls {#<<} and thus may raise a {TimeoutError}.
+      # @note This calls {#<<} and thus may raise a {TimeoutError timeout error}.
       def execute(&block)
         raise "Block required" unless block_given?
 
@@ -72,6 +72,49 @@ module Byebug
         else
           r
         end
+      end
+
+      # Line handler.
+      # @note This should only be called by Byebug internals
+      # @api private
+      def at_line
+        stopped!
+      end
+
+      # End of class/module handler.
+      # @note This should only be called by Byebug internals
+      # @api private
+      def at_end
+        stopped!
+      end
+
+      # Return handler.
+      # @note This should only be called by Byebug internals
+      # @api private
+      def at_return(return_value)
+        @at_return = return_value
+        stopped!
+      end
+
+      # Tracing handler.
+      # @note This should only be called by Byebug internals
+      # @api private
+      def at_tracing
+        # @session.puts "Tracing: #{context.full_location}"
+      end
+
+      # Breakpoint handler.
+      # @note This should only be called by Byebug internals
+      # @api private
+      def at_breakpoint(breakpoint)
+        @last_breakpoint = breakpoint
+      end
+
+      # Catchpoint handler.
+      # @note This should only be called by Byebug internals
+      # @api private
+      def at_catchpoint(exception)
+        @last_exception = exception
       end
 
       private
@@ -96,30 +139,6 @@ module Byebug
 
       rescue StandardError => e
         log "\n! #{e.message} (#{e.class})", *e.backtrace
-      end
-
-      alias_method :at_line, :stopped!
-      alias_method :at_end, :stopped!
-
-      def at_end
-        stopped!
-      end
-
-      def at_return(return_value)
-        @at_return = return_value
-        stopped!
-      end
-
-      def at_tracing
-        # @session.puts "Tracing: #{context.full_location}"
-      end
-
-      def at_breakpoint(breakpoint)
-        @last_breakpoint = breakpoint
-      end
-
-      def at_catchpoint(exception)
-        @last_exception = exception
       end
 
       def stopped!

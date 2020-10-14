@@ -27,7 +27,7 @@ module Byebug::DAP
 
       variables = vars[first...last].map { |var, get| prepare_value_response(thnum, frnum, :variable, name: var) { get.call(var) } }
 
-      respond! body: ::DAP::VariablesResponseBody.new(variables: variables)
+      respond! body: Protocol::VariablesResponseBody.new(variables: variables)
     end
   end
 end

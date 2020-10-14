@@ -7,11 +7,11 @@ module Byebug::DAP
     def execute
       started!
 
-      respond! body: ::DAP::ThreadsResponseBody.new(
+      respond! body: Protocol::ThreadsResponseBody.new(
         threads: Byebug
           .contexts
           .filter { |ctx| !ctx.thread.is_a?(::Byebug::DebugThread) }
-          .map { |ctx| ::DAP::Thread.new(
+          .map { |ctx| Protocol::Thread.new(
             id: ctx.thnum,
             name: ctx.thread.name || "Thread ##{ctx.thnum}"
           ).validate! })

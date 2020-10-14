@@ -4,8 +4,9 @@ module Byebug
     class Session
       include SafeHelpers
 
-      # Call {Session#stop!} on {Byebug::Context.interface} if it is a {Session}.
-      # @return [Boolean] whether {Byebug::Context.interface} was a {Session}
+      # Call {Session#stop!} on {gem:byebug:Byebug::Context.interface} if it is
+      # a {Session}.
+      # @return [Boolean] whether {gem:byebug:Byebug::Context.interface} was a {Session}
       def self.stop!
         session = Byebug::Context.interface
         return false unless session.is_a?(Session)
@@ -14,9 +15,9 @@ module Byebug
         true
       end
 
-      # Add a {ChildSpawnedEventBody} entry and send a `childSpawned` event to
-      # the current session's client, if {Byebug::Context.interface} is a
-      # {Session}.
+      # Record a {ChildSpawnedEventBody childSpawned event} and send the event
+      # to the current session's client, if
+      # {gem:byebug:Byebug::Context.interface} is a {Session}.
       def self.child_spawned(name, pid, socket)
         child = ChildSpawnedEventBody.new(name: name, pid: pid, socket: socket)
         (@@children ||= []) << child
@@ -32,7 +33,7 @@ module Byebug
       end
 
       # Create a new session instance.
-      # @param connection [IO] the connection to the client
+      # @param connection [std:IO] the connection to the client
       # @param ios [CapturedIO] the captured IO
       # @yield called once the client is done configuring the session (optional)
       def initialize(connection, ios = nil, &block)
@@ -64,7 +65,7 @@ module Byebug
       # Execute requests from the client until the connection is closed.
       def execute
         Context.interface = self
-        Context.processor = Byebug::DAP::CommandProcessor
+        Context.processor = DAP::CommandProcessor
 
         Command.execute(self, receive) until @connection.closed?
 
@@ -72,7 +73,7 @@ module Byebug
       end
 
       # Invalidate frame IDs and variables references.
-      # @note This should only be used by a {ContextualCommand} that un-pauses its context
+      # @note This should only be used by a {ContextualCommand contextual command} that un-pauses its context
       # @api private
       def invalidate_handles!
         @frame_ids.clear!
@@ -80,8 +81,8 @@ module Byebug
       end
 
       # Start Byebug.
-      # @param mode [Symbol] `:attached` or `:launched`
-      # @note This should only be used by {Command::Attach} or {Command::Launch}
+      # @param mode [std:Symbol] `:attached` or `:launched`
+      # @note This should only be used by the {Command::Attach attach} or {Command::Launch launch} commands
       # @api private
       def start!(mode)
         @trace.enable
@@ -91,7 +92,7 @@ module Byebug
       end
 
       # Call the block passed to {#initialize}.
-      # @note This should only be used by {Command::ConfigurationDone}
+      # @note This should only be used by the {Command::ConfigurationDone configurationDone} commands
       # @api private
       def configured!
         return unless @on_configured
@@ -101,7 +102,7 @@ module Byebug
       end
 
       # Stop Byebug and close the client's connection.
-      # @note If the session was started with the `launch` command, this will call {Kernel#exit}
+      # @note If the session was started with the `launch` command, this will {std:Kernel#exit exit}
       def stop!
         exit if @exit_on_stop && @pid == Process.pid
 
@@ -113,27 +114,27 @@ module Byebug
 
       # Send an event to the client. Either call with an event name and body
       # attributes, or call with an already constructed body.
-      # @param event [String|Protocol::Base] the event name or event body
-      # @param values [Hash] event body attributes
+      # @param event [std:String|Protocol::Base] the event name or event body
+      # @param values [std:Hash] event body attributes
       def event!(event, **values)
         if (cls = event.class.name.split('::').last) && cls.end_with?('EventBody')
           body, event = event, cls[0].downcase + cls[1...-9]
 
         elsif event.is_a?(String) && !values.empty?
-          body = ::DAP.const_get("#{event[0].upcase}#{event[1..]}EventBody").new(values)
+          body = Protocol.const_get("#{event[0].upcase}#{event[1..]}EventBody").new(values)
         end
 
-        send ::DAP::Event.new(event: event, body: body)
+        send Protocol::Event.new(event: event, body: body)
       end
 
       # Send a response to the client.
       # @param request [Protocol::Request] the request to respond to
-      # @param body [Hash|Protocol::Base] the response body
-      # @param success [Boolean] whether the request was successful
-      # @param message [String] the response message
-      # @param values [Hash] additional response attributes
+      # @param body [std:Hash|Protocol::Base] the response body
+      # @param success [std:Boolean] whether the request was successful
+      # @param message [std:String] the response message
+      # @param values [std:Hash] additional response attributes
       def respond!(request, body = nil, success: true, message: 'Success', **values)
-        send ::DAP::Response.new(
+        send Protocol::Response.new(
           request_seq: request.seq,
           command: request.command,
           success: success,
@@ -163,18 +164,18 @@ module Byebug
       end
 
       # Get the log point expression associated with `breakpoint`.
-      # @param breakpoint [Byebug::Breakpoint] the breakpoint
-      # @return [String] the log point expression
-      # @note This should only be used by {CommandProcessor}
+      # @param breakpoint [gem:byebug:Byebug::Breakpoint] the breakpoint
+      # @return [std:String] the log point expression
+      # @note This should only be used by a {CommandProcessor command processor}
       # @api private
       def get_log_point(breakpoint)
         @log_points[breakpoint.id]
       end
 
       # Associate a log point expression with `breakpoint`.
-      # @param breakpoint [Byebug::Breakpoint] the breakpoint
-      # @param expr [String] the log point expression
-      # @note This should only be used by {CommandProcessor}
+      # @param breakpoint [gem:byebug:Byebug::Breakpoint] the breakpoint
+      # @param expr [std:String] the log point expression
+      # @note This should only be used by a {CommandProcessor command processor}
       # @api private
       def set_log_point(breakpoint, expr)
         if expr.nil? || expr.empty?
@@ -186,7 +187,7 @@ module Byebug
 
       # Delete the specified breakpoints and any log points associated with
       # them.
-      # @param breakpoints [Array<Byebug::Breakpoint>] the breakpoints
+      # @param breakpoints [std:Array<gem:byebug:Byebug::Breakpoint>] the breakpoints
       def clear_breakpoints(*breakpoints)
         breakpoints.each do |breakpoint|
           Byebug.breakpoints.delete(breakpoint)
@@ -205,11 +206,11 @@ module Byebug
       def send(message)
         log "#{Process.pid} > #{message.to_wire}" if Debug.protocol
         message.validate!
-        @connection.write ::DAP::Encoding.encode(message)
+        @connection.write Protocol.encode(message)
       end
 
       def receive
-        m = ::DAP::Encoding.decode(@connection)
+        m = Protocol.decode(@connection)
         log "#{Process.pid} < #{m.to_wire}" if Debug.protocol
         m
       end

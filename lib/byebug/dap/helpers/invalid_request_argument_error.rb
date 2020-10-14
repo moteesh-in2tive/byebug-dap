@@ -4,7 +4,7 @@ module Byebug
     # @api private
     class InvalidRequestArgumentError < StandardError
       # The error kind or message.
-      # @return [Symbol|String]
+      # @return [std:Symbol|std:String]
       attr_reader :error
 
       # The error value.

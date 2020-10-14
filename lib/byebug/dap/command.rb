@@ -8,7 +8,7 @@ module Byebug::DAP
     include SafeHelpers
 
     # The DAP command assocated with the receiver.
-    # @return [String]
+    # @return [std:String]
     def self.command
       return @command_name if defined?(@command_name)
 
@@ -29,7 +29,7 @@ module Byebug::DAP
     # failed request if the command cannot be found.
     # @param session [Session] the debug session
     # @param request [Protocol::Request] the DAP request
-    # @return [Class] the {Command} class
+    # @return [std:Class] the {Command} class
     def self.resolve!(session, request)
       cls = @@commands[request.command]
       return cls if cls
@@ -37,11 +37,11 @@ module Byebug::DAP
       session.respond! request, success: false, message: 'Invalid command'
     end
 
-    # Resolve and execute the requested command. The command is resolved with
-    # {.resolve!}, {#initialize}d, and {#safe_execute}d.
+    # Resolve and execute the requested command. The command is {.resolve!
+    # resolved}, {#initialize initialized}, and {#safe_execute safely executed}.
     # @param session [Session] the debug session
     # @param request [Protocol::Request] the DAP request
-    # @param args [Array] additional arguments for {#initialize}
+    # @param args [std:Array] additional arguments for {#initialize}
     # @return the return value of {#safe_execute}
     def self.execute(session, request, *args)
       return unless command = resolve!(session, request)
@@ -140,11 +140,11 @@ module Byebug::DAP
       safe(-> { "#{ex.message} (#{ex.class.name})" }, :call) { EVAL_ERROR }
     end
 
-    # Execute a code block on the specified thread. See {SafeHelpers#safe}.
-    # @param thnum [Integer] the thread number
-    # @param block [Proc] the code block
+    # Execute a code block on the specified thread, {SafeHelpers#safe safely}.
+    # @param thnum [std:Integer] the thread number
+    # @param block [std:Proc] the code block
     # @yield called on error
-    # @yieldparam ex [Exception] the execution error
+    # @yieldparam ex [std:Exception] the execution error
     # @api private
     # @!visibility public
     def execute_on_thread(thnum, block, &on_error)

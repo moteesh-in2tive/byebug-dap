@@ -2,8 +2,10 @@ module Byebug::DAP
   # Used in case statements to identify scalar types.
   # @api private
   module Scalar
-    # Match scalar values. Scalars are `nil`, `true`, `false`, {String},
-    # {Symbol}, {Numeric}, {Time}, {Range}, {Date}, {DateTime}.
+    # Match scalar values. {std:NilClass nil}, {std:TrueClass true},
+    # {std:FalseClass false}, {std:String strings}, {std:Numeric numbers},
+    # {std:Time times}, {std:Range ranges}, {std:date:Date dates}, and
+    # {std:date:DateTime date-times} are considered scalars.
     # @return [Boolean]
     def ===(value)
       case value

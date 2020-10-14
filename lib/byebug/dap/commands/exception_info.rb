@@ -15,7 +15,7 @@ module Byebug::DAP
       respond! body: {
         exceptionId: class_name,
         description: exception_description(ex),
-        breakMode: ::DAP::ExceptionBreakMode::ALWAYS,
+        breakMode: Protocol::ExceptionBreakMode::ALWAYS,
         details: details(ex, '$!'),
       }
     end

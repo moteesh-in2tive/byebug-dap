@@ -21,8 +21,9 @@ module Byebug::DAP
       @context = processor&.context
     end
 
-    # Call {#execute_in_context} if `processor` is defined. Otherwise, ensure
-    # {#started!}, find the requested thread context, and {#forward_to_context}.
+    # {#execute_in_context Execute in-context} if `processor` is defined.
+    # Otherwise, ensure debugging is {#started! started}, find the requested
+    # thread context, and {#forward_to_context forward the request}.
     def execute
       return execute_in_context if @processor
 
@@ -34,7 +35,7 @@ module Byebug::DAP
     private
 
     # Forward the request to the context's thread.
-    # @param ctx [Byebug::Context] the context
+    # @param ctx [gem:byebug:Byebug::Context] the context
     # @api private
     # @!visibility public
     def forward_to_context(ctx)

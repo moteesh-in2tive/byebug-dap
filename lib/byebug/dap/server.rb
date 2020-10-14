@@ -32,8 +32,8 @@ module Byebug
       end
 
       # Starts the server, listening on a TCP socket.
-      # @param host [String] the IP to listen on
-      # @param port [Number] the port to listen on
+      # @param host [std:String] the IP to listen on
+      # @param port [std:Number] the port to listen on
       # @return [Server]
       def start_tcp(host, port)
         return if @started
@@ -44,7 +44,7 @@ module Byebug
       end
 
       # Starts the server, listening on a Unix socket.
-      # @param socket [String] the Unix socket path
+      # @param socket [std:String] the Unix socket path
       # @return [Server]
       def start_unix(socket)
         return if @started

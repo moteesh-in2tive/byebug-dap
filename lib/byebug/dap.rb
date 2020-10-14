@@ -5,6 +5,11 @@ require 'byebug/remote'
 
 require_relative 'gem'
 
+module Byebug::DAP
+  # An alias for `ruby-dap`'s {DAP} module.
+  Protocol = ::DAP
+end
+
 # load helpers
 Dir[File.join(__dir__, 'dap', 'helpers', '*.rb')].each { |file| require file }
 
@@ -42,9 +47,6 @@ module Byebug
 end
 
 module Byebug::DAP
-  # An alias for `ruby-dap`'s {DAP} module.
-  Protocol = ::DAP
-
   class << self
     # (see Session.stop!)
     def stop!

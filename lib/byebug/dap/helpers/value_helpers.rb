@@ -4,7 +4,7 @@ module Byebug::DAP
   module ValueHelpers
     # Safely inspect a value and retrieve its class name, class and instance
     # variables, and indexed members. {Scalar} values do not have variables or
-    # members. Only {Array}s and {Hash}es have members.
+    # members. Only {std:Array arrays} and {std:Hash hashes} have members.
     # @return `val.inspect`, `val.class.name`, variables, and members.
     def prepare_value(val)
       str = safe(val, :inspect) { safe(val, :to_s) { return yield } }
@@ -29,12 +29,12 @@ module Byebug::DAP
 
     # Prepare a {Protocol::Variable} or {Protocol::EvaluateResponseBody} for a
     # calculated value. For global variables and evaluations, `thnum` and
-    # `frnum` should be 0. Local variables and evaluations are executed on the
-    # specified thread with {Command#execute_on_thread}.
-    # @param thnum [Integer] the thread number
-    # @param frnum [Integer] the frame number
-    # @param kind [Symbol] `:variable` or `:evaluate`
-    # @param name [String] the variable name (ignored for evaluations)
+    # `frnum` should be 0. Local variables and evaluations are
+    # {Command#execute_on_thread executed on the specified thread}.
+    # @param thnum [std:Integer] the thread number
+    # @param frnum [std:Integer] the frame number
+    # @param kind [std:Symbol] `:variable` or `:evaluate`
+    # @param name [std:String] the variable name (ignored for evaluations)
     # @yield retrieves an variable or evaluates an expression
     def prepare_value_response(thnum, frnum, kind, name: nil, &block)
       err = nil
@@ -54,10 +54,10 @@ module Byebug::DAP
 
       case kind
       when :variable
-        klazz = ::DAP::Variable
+        klazz = Protocol::Variable
         args = { name: safe(name, :to_s) { safe(name, :inspect) { '???' } }, value: value, type: type }
       when :evaluate
-        klazz = ::DAP::EvaluateResponseBody
+        klazz = Protocol::EvaluateResponseBody
         args = { result: value, type: type }
       end
 

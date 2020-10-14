@@ -42,7 +42,7 @@ module Byebug::DAP
           results << {
             id: bp.id,
             verified: true,
-            source: ::DAP::Source.new(name: File.basename(cm[0]), path: cm[0]),
+            source: Protocol::Source.new(name: File.basename(cm[0]), path: cm[0]),
             line: cm[1]
           }
         end
@@ -51,7 +51,7 @@ module Byebug::DAP
           results << {
             id: bp.id,
             verified: true,
-            source: ::DAP::Source.new(name: File.basename(im[0]), path: im[0]),
+            source: Protocol::Source.new(name: File.basename(im[0]), path: im[0]),
             line: im[1]
           }
         end

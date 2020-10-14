@@ -14,7 +14,7 @@ module Byebug::DAP
 
       locals = frame_local_names(frame).sort
       unless locals.empty?
-        scopes << ::DAP::Scope.new(
+        scopes << Protocol::Scope.new(
           name: 'Locals',
           presentationHint: 'locals',
           variablesReference: @session.save_variables(thnum, frnum, :locals, locals),
@@ -26,7 +26,7 @@ module Byebug::DAP
 
       globals = global_names.sort
       unless globals.empty?
-        scopes << ::DAP::Scope.new(
+        scopes << Protocol::Scope.new(
           name: 'Globals',
           presentationHint: 'globals',
           variablesReference: @session.save_variables(thnum, frnum, :globals, globals),
@@ -36,7 +36,7 @@ module Byebug::DAP
           .validate!
       end
 
-      respond! body: ::DAP::ScopesResponseBody.new(scopes: scopes)
+      respond! body: Protocol::ScopesResponseBody.new(scopes: scopes)
     end
 
     private
