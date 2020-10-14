@@ -5,7 +5,7 @@ module Byebug
     NAME = 'byebug-dap'
 
     # Gem version
-    VERSION = '0.1.3'
+    VERSION = '0.1.4'
 
     # Gem summary
     SUMMARY = 'Debug Adapter Protocol for Byebug'

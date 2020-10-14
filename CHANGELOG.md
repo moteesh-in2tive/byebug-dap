@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.4
+
+- Workaround a bug caused by
+  [byebug#734](https://github.com/deivid-rodriguez/byebug/issues/734) by setting
+  the breakpoint hit condition to `>= 0` when the condition should be `nil`.
+
 ## 0.1.3
 
 - Support for output capture
