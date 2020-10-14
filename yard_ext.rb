@@ -12,7 +12,7 @@ module YARD::Templates::Helpers::BaseHelper
   def linkify(*args)
     name, text, = args
     link = $pre_swizzle_linkify.bind(self).call(*args)
-    return link unless name == link || text == link
+    return link if !name.is_a?(String) || link.start_with?('<span')
     return link unless m = name.match($external_linkify_re)
 
     if m[:kind].nil? && m[:scope].start_with?('Protocol::')
@@ -25,7 +25,7 @@ module YARD::Templates::Helpers::BaseHelper
   end
 
   def build_external_link(kind, lib, scope, method, name, text)
-    text = "#{scope}#{method}" if text == name
+    text = "#{scope}#{method}" if text == name || text.nil?
 
     title = name
     if method

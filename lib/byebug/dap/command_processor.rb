@@ -57,7 +57,7 @@ module Byebug
 
       # Execute a code block in the thread.
       # @yield the code block to execute
-      # @note This calls {#<<} and thus may raise a {TimeoutError timeout error}.
+      # @note This calls {#\<\<} and thus may raise a {TimeoutError timeout error}.
       def execute(&block)
         raise "Block required" unless block_given?
 
