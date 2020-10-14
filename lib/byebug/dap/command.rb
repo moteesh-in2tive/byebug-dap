@@ -243,8 +243,10 @@ module Byebug::DAP
     end
 
     def convert_breakpoint_hit_condition(condition)
-      return nil if condition.nil? || condition.empty?
-      return nil unless condition.is_a?(String)
+      # Because of https://github.com/deivid-rodriguez/byebug/issues/739,
+      # Breakpoint#hit_condition can't be set to nil.
+      return :ge, 0 if condition.nil? || condition.empty?
+      return :ge, 0 unless condition.is_a?(String)
 
       m = /^(?<op><|<=|=|==|===|=>|>|%)?\s*(?<value>[0-9]+)$/.match(condition)
       raise InvalidRequestArgumentError.new("'#{condition}' is not a valid hit condition") unless m
